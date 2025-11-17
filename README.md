@@ -1,45 +1,133 @@
-# Telegram App
+# Аставайся - Telegram Bot для аренды квартир
 
-## Description
+Телеграм-бот для посуточной аренды квартир с админ-панелью на PHP/Bootstrap.
 
-This project is a Telegram application.
+## Структура проекта
 
-## Installation
+```
+telegram_app/
+├── bot/                    # Telegram бот (Python/aiogram)
+│   ├── main.py            # Основной файл бота
+│   ├── database.py        # Работа с БД
+│   ├── keyboards.py       # Клавиатуры
+│   ├── locales.py         # Локализация (RU/KK)
+│   ├── config.py          # Конфигурация
+│   └── requirements.txt   # Зависимости Python
+├── admin/                  # Админ-панель (PHP/Bootstrap)
+│   ├── index.php          # Дашборд
+│   ├── apartments.php     # Управление квартирами
+│   ├── bookings.php       # Бронирования
+│   ├── users.php          # Пользователи
+│   ├── landlords.php      # Арендодатели
+│   ├── reviews.php        # Отзывы
+│   ├── cities.php         # Города и районы
+│   ├── requests.php       # Заявки на подключение
+│   ├── settings.php       # Настройки
+│   ├── sqlite_browser.php # SQLite Browser
+│   └── login.php          # Авторизация
+├── database/               # База данных SQLite
+│   ├── schema.sql         # Схема БД
+│   └── rental.db          # Файл базы данных
+└── uploads/                # Загруженные файлы
+    └── apartments/         # Фотографии квартир
+```
+
+## Требования
+
+- Python 3.8+
+- PHP 7.4+ с поддержкой SQLite
+- Веб-сервер (Apache/Nginx) для админ-панели
+
+## Установка
+
+### 1. Настройка бота
 
 ```bash
-# Clone the repository
-git clone <repository-url>
-cd telegram_app
-
-# Install dependencies
-npm install
+cd bot
+python3 -m venv venv
+source venv/bin/activate  # Linux/Mac
+# или venv\Scripts\activate  # Windows
+pip install -r requirements.txt
 ```
 
-## Usage
+### 2. Настройка токена бота
+
+1. Создайте бота через [@BotFather](https://t.me/BotFather) в Telegram
+2. Получите токен бота
+3. Откройте `bot/main.py` и замените `YOUR_BOT_TOKEN_HERE` на ваш токен:
+
+```python
+BOT_TOKEN = "123456789:ABCdefGHIjklMNOpqrsTUVwxyz"
+```
+
+### 3. Инициализация базы данных
 
 ```bash
-# Run the application
-npm start
+python3 init_db.py
 ```
 
-## Features
+### 4. Запуск бота
 
-- Telegram bot integration
-- Message handling
-- User interaction
-
-## Configuration
-
-Create a `.env` file in the root directory with your configuration:
-
-```
-TELEGRAM_BOT_TOKEN=your_bot_token_here
+```bash
+cd bot
+python3 main.py
 ```
 
-## Contributing
+### 5. Настройка админ-панели
 
-Contributions are welcome! Please feel free to submit a Pull Request.
+**Для разработки (встроенный PHP сервер):**
+```bash
+cd admin
+php -S localhost:8080
+```
 
-## License
+Откройте http://localhost:8080 в браузере.
 
-This project is licensed under the MIT License.
+### 6. Вход в админ-панель
+
+- URL: http://localhost:8080/login.php
+- Логин: `admin`
+- Пароль: `admin123`
+
+**Важно:** Смените пароль после первого входа!
+
+## Функции бота
+
+### Для пользователей:
+- Регистрация с выбором языка (RU/KK)
+- Поиск квартир с фильтрами (город, район, даты)
+- Интерактивный календарь для выбора дат
+- Просмотр карточек квартир с фотографиями
+- Бронирование квартир
+- Избранное
+- История бронирований
+- Отзывы и рейтинги
+
+### Для арендодателей:
+- Подача заявки на подключение
+- Просмотр условий сотрудничества
+
+## Функции админ-панели
+
+- **Дашборд**: Общая статистика
+- **Квартиры**: CRUD операции, фотографии, удобства
+- **Бронирования**: Управление статусами
+- **Пользователи**: Просмотр профилей
+- **Арендодатели**: Управление профилями
+- **Отзывы**: Модерация отзывов
+- **Города и районы**: Управление геолокацией
+- **Заявки**: Одобрение/отклонение заявок
+- **Настройки**: Конфигурация платформы
+- **SQLite Browser**: Прямой доступ к БД
+
+## Локализация
+
+Поддерживаются два языка:
+- 🇷🇺 Русский
+- 🇰🇿 Қазақша (Казахский)
+
+Все тексты интерфейса бота находятся в `bot/locales.py`.
+
+## Лицензия
+
+MIT License
