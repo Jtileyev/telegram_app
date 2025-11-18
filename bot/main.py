@@ -12,10 +12,11 @@ from aiogram.fsm.storage.memory import MemoryStorage
 import database as db
 from keyboards import *
 from locales import get_text
+from logger import setup_logger, get_audit_logger, log_user_action, log_booking_action, log_error
 
-# Configure logging
-logging.basicConfig(level=logging.INFO)
-logger = logging.getLogger(__name__)
+# Configure logging with new centralized system
+logger = setup_logger('telegram_bot')
+audit_logger = get_audit_logger()
 
 # Bot and dispatcher will be initialized after database
 bot = None
@@ -248,6 +249,10 @@ async def process_phone(message: Message, state: FSMContext):
 
     db.update_user(telegram_id, phone=phone)
     user = db.get_user(telegram_id)
+
+    # Log successful registration
+    log_user_action(logger, telegram_id, "Registration completed", f"Phone: {phone}")
+    audit_logger.info(f"New user registered: {telegram_id}")
 
     await state.clear()
     await message.answer(
@@ -780,6 +785,16 @@ async def create_booking_request(message: Message, state: FSMContext, user: dict
         total_price, platform_fee
     )
 
+    # Log booking creation
+    log_booking_action(
+        audit_logger,
+        user['id'],
+        booking_id,
+        "Booking created",
+        f"Apartment {apartment_id}, Total: {total_price}₸, Dates: {filters['check_in']} to {filters['check_out']}"
+    )
+    logger.info(f"Booking {booking_id} created by user {user['id']} for apartment {apartment_id}")
+
     await message.answer(
         get_text('booking_created', lang),
         reply_markup=get_main_menu_keyboard(lang)
@@ -1056,16 +1071,8 @@ async def show_booking_details(callback: CallbackQuery):
     telegram_id = callback.from_user.id
     lang = db.get_user_language(telegram_id)
 
-    # Get booking from database
-    conn = db.get_connection()
-    cursor = conn.execute("""
-        SELECT b.*, a.title_ru, a.title_kk, a.address
-        FROM bookings b
-        JOIN apartments a ON b.apartment_id = a.id
-        WHERE b.id = ?
-    """, (booking_id,))
-    booking = cursor.fetchone()
-    conn.close()
+    # Get booking from database using database abstraction
+    booking = db.get_booking_by_id(booking_id)
 
     if booking:
         title = booking['title_ru'] if lang == 'ru' else booking['title_kk']
@@ -1138,10 +1145,8 @@ async def mark_helpful(callback: CallbackQuery):
     telegram_id = callback.from_user.id
     lang = db.get_user_language(telegram_id)
 
-    conn = db.get_connection()
-    conn.execute("UPDATE reviews SET helpful_count = helpful_count + 1 WHERE id = ?", (review_id,))
-    conn.commit()
-    conn.close()
+    # Use database abstraction for updating helpful count
+    db.increment_review_helpful_count(review_id)
 
     await callback.answer(get_text('marked_helpful', lang))
 
@@ -1152,10 +1157,8 @@ async def mark_not_helpful(callback: CallbackQuery):
     telegram_id = callback.from_user.id
     lang = db.get_user_language(telegram_id)
 
-    conn = db.get_connection()
-    conn.execute("UPDATE reviews SET not_helpful_count = not_helpful_count + 1 WHERE id = ?", (review_id,))
-    conn.commit()
-    conn.close()
+    # Use database abstraction for updating not helpful count
+    db.increment_review_not_helpful_count(review_id)
 
     await callback.answer(get_text('marked_not_helpful', lang))
 
