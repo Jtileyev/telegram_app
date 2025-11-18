@@ -13,6 +13,8 @@ import database as db
 from keyboards import *
 from locales import get_text
 from logger import setup_logger, get_audit_logger, log_user_action, log_booking_action, log_error
+from rate_limiter import default_rate_limiter
+from notifications import notify_landlord_new_booking
 
 # Configure logging with new centralized system
 logger = setup_logger('telegram_bot')
@@ -800,7 +802,37 @@ async def create_booking_request(message: Message, state: FSMContext, user: dict
         reply_markup=get_main_menu_keyboard(lang)
     )
 
-    # TODO: Notify landlord about new booking
+    # Notify landlord about new booking
+    try:
+        # Get landlord telegram_id from database
+        landlord = db.get_user(telegram_id=None)  # We need to get by ID
+        landlord_data = db.get_connection().execute(
+            "SELECT telegram_id, full_name FROM users WHERE id = ?",
+            (apartment['landlord_id'],)
+        ).fetchone()
+
+        if landlord_data and landlord_data['telegram_id']:
+            apartment_title = apartment['title_ru'] if lang == 'ru' else apartment['title_kk']
+
+            # Import config to get bot token
+            from config import get_bot_token
+            bot_token = get_bot_token()
+
+            # Send notification to landlord
+            await notify_landlord_new_booking(
+                landlord_telegram_id=landlord_data['telegram_id'],
+                booking_id=booking_id,
+                apartment_title=apartment_title,
+                guest_name=user['full_name'],
+                check_in=filters['check_in'],
+                check_out=filters['check_out'],
+                total_price=total_price,
+                bot_token=bot_token
+            )
+            logger.info(f"Sent new booking notification to landlord {landlord_data['telegram_id']}")
+    except Exception as e:
+        # Don't fail the booking if notification fails
+        log_error(logger, e, "notify_landlord_new_booking")
 
     await state.clear()
 
@@ -1243,6 +1275,11 @@ async def main():
     except ValueError as e:
         logger.error(f"Failed to get bot token: {e}")
         return
+
+    # Register rate limiting middleware
+    dp.message.middleware(default_rate_limiter)
+    dp.callback_query.middleware(default_rate_limiter)
+    logger.info("Rate limiting middleware enabled (10 req/min, burst 20)")
 
     # Include router
     dp.include_router(router)

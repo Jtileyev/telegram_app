@@ -8,8 +8,13 @@ import sqlite3
 import json
 import secrets
 import string
+import os
 from pathlib import Path
 from datetime import datetime
+from dotenv import load_dotenv
+
+# Load environment variables
+load_dotenv()
 
 DB_PATH = Path(__file__).parent / 'database' / 'rental.db'
 
@@ -54,21 +59,31 @@ def main():
     print("DATABASE INITIALIZATION")
     print("="*60)
 
-    # Generate password for admin
-    admin_email = "atks0513@gmail.com"
+    # Get admin credentials from environment or use defaults
+    admin_email = os.getenv('ADMIN_EMAIL', 'atks0513@gmail.com')
+    admin_password_env = os.getenv('ADMIN_PASSWORD')
 
-    # Try to use bcrypt, fall back to simple password if not available
-    try:
-        import bcrypt
-        admin_password = generate_password()
+    # Use password from environment if set, otherwise generate random
+    if admin_password_env:
+        admin_password = admin_password_env
         print(f"\n📧 Admin Email: {admin_email}")
-        print(f"🔑 Generated Password: {admin_password}")
-        print("\n⚠️  SAVE THIS PASSWORD!")
-    except ImportError:
-        admin_password = "admin"
-        print(f"\n📧 Admin Email: {admin_email}")
-        print(f"🔑 Default Password: {admin_password}")
-        print("\n⚠️  Using default password. Please change it after first login!")
+        print(f"🔑 Password: (from .env file)")
+        print("\n✓ Using password from environment variables")
+    else:
+        # Try to use bcrypt, fall back to simple password if not available
+        try:
+            import bcrypt
+            admin_password = generate_password()
+            print(f"\n📧 Admin Email: {admin_email}")
+            print(f"🔑 Generated Password: {admin_password}")
+            print("\n⚠️  SAVE THIS PASSWORD!")
+            print("💡 Tip: You can set ADMIN_PASSWORD in .env file to use a custom password")
+        except ImportError:
+            admin_password = "admin"
+            print(f"\n📧 Admin Email: {admin_email}")
+            print(f"🔑 Default Password: {admin_password}")
+            print("\n⚠️  Using default password. Please change it after first login!")
+            print("💡 Tip: Install bcrypt for secure password generation: pip install bcrypt")
 
     # 1. Create/Update default admin
     print("\n1. Setting up admin user...")

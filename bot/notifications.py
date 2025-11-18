@@ -40,3 +40,29 @@ def notify_booking_status(telegram_id: int, status: str, apartment_title: str, b
 
     message = status_messages.get(status, f'Статус бронирования изменен: {status}')
     asyncio.run(send_notification(telegram_id, message, bot_token))
+
+
+async def notify_landlord_new_booking(
+    landlord_telegram_id: int,
+    booking_id: int,
+    apartment_title: str,
+    guest_name: str,
+    check_in: str,
+    check_out: str,
+    total_price: float,
+    bot_token: str
+):
+    """Notify landlord about new booking"""
+    message = f"""🔔 <b>Новое бронирование!</b>
+
+Квартира: {apartment_title}
+Гость: {guest_name}
+Заезд: {check_in}
+Выезд: {check_out}
+Сумма: {total_price:,.0f} ₸
+
+Бронирование #{booking_id}
+
+Пожалуйста, подтвердите или отклоните бронирование в админ-панели."""
+
+    await send_notification(landlord_telegram_id, message, bot_token)
