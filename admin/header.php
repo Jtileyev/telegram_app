@@ -86,6 +86,11 @@
                             </a>
                         </li>
                         <li class="nav-item">
+                            <a class="nav-link <?= basename($_SERVER['PHP_SELF']) == 'translations.php' ? 'active' : '' ?>" href="translations.php">
+                                <i class="bi bi-translate me-2"></i>Редактор переводов
+                            </a>
+                        </li>
+                        <li class="nav-item">
                             <a class="nav-link <?= basename($_SERVER['PHP_SELF']) == 'settings.php' ? 'active' : '' ?>" href="settings.php">
                                 <i class="bi bi-gear me-2"></i>Настройки
                             </a>

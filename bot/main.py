@@ -802,6 +802,318 @@ async def ignore_callback(callback: CallbackQuery):
     """Ignore callback (for disabled buttons)"""
     await callback.answer()
 
+# Additional callback handlers for unhandled buttons
+@router.callback_query(F.data == "search_back")
+async def search_back(callback: CallbackQuery, state: FSMContext):
+    """Back button from city selection"""
+    await state.clear()
+    telegram_id = callback.from_user.id
+    lang = db.get_user_language(telegram_id)
+    await callback.message.delete()
+    await callback.message.answer("🏠", reply_markup=get_main_menu_keyboard(lang))
+    await callback.answer()
+
+@router.callback_query(F.data == "filters_back")
+async def filters_back(callback: CallbackQuery, state: FSMContext):
+    """Back button from filters summary"""
+    telegram_id = callback.from_user.id
+    lang = db.get_user_language(telegram_id)
+
+    data = await state.get_data()
+    filters = data.get('filters', {})
+
+    if 'district_id' in filters:
+        # Go back to district selection
+        districts = db.get_districts(filters['city_id'])
+        await callback.message.edit_text(
+            get_text('select_district', lang),
+            reply_markup=get_districts_keyboard(districts, lang)
+        )
+        await state.set_state(SearchStates.selecting_district)
+    else:
+        # Go back to city selection
+        cities = db.get_cities()
+        await callback.message.edit_text(
+            get_text('select_city', lang),
+            reply_markup=get_cities_keyboard(cities, lang)
+        )
+        await state.set_state(SearchStates.selecting_city)
+    await callback.answer()
+
+@router.callback_query(F.data == "change_filters")
+async def change_filters(callback: CallbackQuery, state: FSMContext):
+    """Change search filters"""
+    telegram_id = callback.from_user.id
+    lang = db.get_user_language(telegram_id)
+
+    cities = db.get_cities()
+    await callback.message.edit_text(
+        get_text('select_city', lang),
+        reply_markup=get_cities_keyboard(cities, lang)
+    )
+    await state.set_state(SearchStates.selecting_city)
+    await callback.answer()
+
+@router.callback_query(F.data == "clear_all_filters")
+async def clear_all_filters(callback: CallbackQuery, state: FSMContext):
+    """Clear all filters"""
+    telegram_id = callback.from_user.id
+    lang = db.get_user_language(telegram_id)
+
+    await state.update_data(filters={})
+    cities = db.get_cities()
+    await callback.message.edit_text(
+        get_text('select_city', lang),
+        reply_markup=get_cities_keyboard(cities, lang)
+    )
+    await state.set_state(SearchStates.selecting_city)
+    await callback.answer(get_text('filters_cleared', lang))
+
+# Calendar handlers
+@router.callback_query(F.data.startswith("cal_prev_") | F.data.startswith("cal_next_"))
+async def calendar_navigation(callback: CallbackQuery, state: FSMContext):
+    """Navigate calendar months"""
+    parts = callback.data.split("_")
+    direction = parts[1]  # prev or next
+    year = int(parts[2])
+    month = int(parts[3])
+    calendar_type = parts[4] if len(parts) > 4 else 'check_in'
+
+    telegram_id = callback.from_user.id
+    lang = db.get_user_language(telegram_id)
+
+    if direction == "prev":
+        month -= 1
+        if month < 1:
+            month = 12
+            year -= 1
+    else:  # next
+        month += 1
+        if month > 12:
+            month = 1
+            year += 1
+
+    data = await state.get_data()
+    filters = data.get('filters', {})
+    min_date = datetime.now()
+    selected_date = filters.get(calendar_type)
+
+    keyboard = get_calendar_keyboard(year, month, lang, min_date, selected_date, calendar_type)
+    await callback.message.edit_reply_markup(reply_markup=keyboard)
+    await callback.answer()
+
+@router.callback_query(F.data.startswith("date_"))
+async def select_date(callback: CallbackQuery, state: FSMContext):
+    """Handle date selection"""
+    parts = callback.data.split("_")
+    calendar_type = parts[1]  # check_in or check_out
+    date_str = parts[2]
+
+    telegram_id = callback.from_user.id
+    lang = db.get_user_language(telegram_id)
+
+    data = await state.get_data()
+    filters = data.get('filters', {})
+    filters[calendar_type] = date_str
+    await state.update_data(filters=filters)
+
+    await callback.message.edit_text(get_text(f'{calendar_type}_selected', lang, date=date_str))
+    await callback.answer()
+
+@router.callback_query(F.data.startswith("calendar_back_"))
+async def calendar_back(callback: CallbackQuery, state: FSMContext):
+    """Back from calendar"""
+    telegram_id = callback.from_user.id
+    lang = db.get_user_language(telegram_id)
+
+    data = await state.get_data()
+    filters = data.get('filters', {})
+
+    await show_filters_summary(callback.message, filters, lang)
+    await callback.answer()
+
+# Booking management handlers
+@router.callback_query(F.data.startswith("chat_"))
+async def chat_with_landlord(callback: CallbackQuery):
+    """Start chat with landlord"""
+    booking_id = int(callback.data.split("_")[1])
+    telegram_id = callback.from_user.id
+    lang = db.get_user_language(telegram_id)
+
+    await callback.answer(get_text('feature_coming_soon', lang), show_alert=True)
+
+@router.callback_query(F.data.startswith("booking_details_"))
+async def show_booking_details(callback: CallbackQuery):
+    """Show booking details"""
+    booking_id = int(callback.data.split("_")[2])
+    telegram_id = callback.from_user.id
+    lang = db.get_user_language(telegram_id)
+
+    # Get booking from database
+    conn = db.get_connection()
+    cursor = conn.execute("""
+        SELECT b.*, a.title_ru, a.title_kk, a.address
+        FROM bookings b
+        JOIN apartments a ON b.apartment_id = a.id
+        WHERE b.id = ?
+    """, (booking_id,))
+    booking = cursor.fetchone()
+    conn.close()
+
+    if booking:
+        title = booking['title_ru'] if lang == 'ru' else booking['title_kk']
+        text = f"🏠 *{title}*\n"
+        text += f"📍 {booking['address']}\n"
+        text += f"📅 {booking['check_in_date']} - {booking['check_out_date']}\n"
+        text += f"💰 {format_price(booking['total_price'])} ₸\n"
+        text += f"📋 {get_text(f'status_{booking['status']}', lang)}"
+
+        await callback.message.answer(text, parse_mode="Markdown")
+    await callback.answer()
+
+@router.callback_query(F.data.startswith("cancel_booking_"))
+async def cancel_booking_confirm(callback: CallbackQuery):
+    """Confirm booking cancellation"""
+    booking_id = int(callback.data.split("_")[2])
+    telegram_id = callback.from_user.id
+    lang = db.get_user_language(telegram_id)
+
+    await callback.message.answer(
+        get_text('confirm_cancel_booking', lang),
+        reply_markup=get_cancel_booking_keyboard(booking_id, lang)
+    )
+    await callback.answer()
+
+@router.callback_query(F.data.startswith("confirm_cancel_"))
+async def confirm_cancel_booking(callback: CallbackQuery):
+    """Confirm and cancel booking"""
+    booking_id = int(callback.data.split("_")[2])
+    telegram_id = callback.from_user.id
+    lang = db.get_user_language(telegram_id)
+
+    # Update booking status to cancelled
+    conn = db.get_connection()
+    conn.execute("UPDATE bookings SET status = 'cancelled' WHERE id = ?", (booking_id,))
+    conn.commit()
+    conn.close()
+
+    await callback.message.edit_text(get_text('booking_cancelled', lang))
+    await callback.answer()
+
+@router.callback_query(F.data.startswith("keep_booking_"))
+async def keep_booking(callback: CallbackQuery):
+    """Keep booking (don't cancel)"""
+    telegram_id = callback.from_user.id
+    lang = db.get_user_language(telegram_id)
+
+    await callback.message.edit_text(get_text('booking_kept', lang))
+    await callback.answer()
+
+# Review handlers
+@router.callback_query(F.data.startswith("rating_"))
+async def select_rating(callback: CallbackQuery, state: FSMContext):
+    """Select review rating"""
+    rating = int(callback.data.split("_")[1])
+    telegram_id = callback.from_user.id
+    lang = db.get_user_language(telegram_id)
+
+    await state.update_data(rating=rating)
+    await callback.message.edit_text(get_text('rating_selected', lang, rating=rating))
+    await callback.message.answer(get_text('enter_review_comment', lang))
+    await state.set_state(ReviewStates.writing_comment)
+    await callback.answer()
+
+@router.callback_query(F.data.startswith("helpful_"))
+async def mark_helpful(callback: CallbackQuery):
+    """Mark review as helpful"""
+    review_id = int(callback.data.split("_")[1])
+    telegram_id = callback.from_user.id
+    lang = db.get_user_language(telegram_id)
+
+    conn = db.get_connection()
+    conn.execute("UPDATE reviews SET helpful_count = helpful_count + 1 WHERE id = ?", (review_id,))
+    conn.commit()
+    conn.close()
+
+    await callback.answer(get_text('marked_helpful', lang))
+
+@router.callback_query(F.data.startswith("not_helpful_"))
+async def mark_not_helpful(callback: CallbackQuery):
+    """Mark review as not helpful"""
+    review_id = int(callback.data.split("_")[2])
+    telegram_id = callback.from_user.id
+    lang = db.get_user_language(telegram_id)
+
+    conn = db.get_connection()
+    conn.execute("UPDATE reviews SET not_helpful_count = not_helpful_count + 1 WHERE id = ?", (review_id,))
+    conn.commit()
+    conn.close()
+
+    await callback.answer(get_text('marked_not_helpful', lang))
+
+@router.callback_query(F.data.startswith("reviews_page_"))
+async def reviews_pagination(callback: CallbackQuery):
+    """Navigate review pages"""
+    parts = callback.data.split("_")
+    apartment_id = int(parts[2])
+    page = int(parts[3])
+    telegram_id = callback.from_user.id
+    lang = db.get_user_language(telegram_id)
+
+    # Get reviews for page
+    reviews_per_page = 5
+    offset = (page - 1) * reviews_per_page
+    reviews = db.get_apartment_reviews(apartment_id, limit=reviews_per_page, offset=offset)
+
+    if reviews:
+        text = get_text('reviews_title', lang) + "\n\n"
+        for review in reviews:
+            stars = "⭐" * review['rating']
+            text += f"{stars} {review['rating']}.0\n"
+            text += f"👤 {review['user_name']}\n"
+            if review.get('comment'):
+                text += f"{review['comment']}\n\n"
+
+        # Get total count for pagination
+        conn = db.get_connection()
+        total = conn.execute("SELECT COUNT(*) FROM reviews WHERE apartment_id = ?", (apartment_id,)).fetchone()[0]
+        conn.close()
+        total_pages = (total + reviews_per_page - 1) // reviews_per_page
+
+        await callback.message.edit_text(
+            text,
+            reply_markup=get_reviews_pagination_keyboard(apartment_id, page, total_pages, lang)
+        )
+    await callback.answer()
+
+@router.callback_query(F.data == "reviews_back")
+async def reviews_back(callback: CallbackQuery):
+    """Back from reviews"""
+    await callback.message.delete()
+    await callback.answer()
+
+# Favorite management
+@router.callback_query(F.data.startswith("confirm_unfav_"))
+async def confirm_unfavorite(callback: CallbackQuery):
+    """Confirm remove from favorites"""
+    apartment_id = int(callback.data.split("_")[2])
+    telegram_id = callback.from_user.id
+    user = db.get_user(telegram_id)
+    lang = user['language']
+
+    db.remove_from_favorites(user['id'], apartment_id)
+    await callback.message.edit_text(get_text('removed_from_favorites', lang))
+    await callback.answer()
+
+@router.callback_query(F.data.startswith("keep_fav_"))
+async def keep_favorite(callback: CallbackQuery):
+    """Keep in favorites"""
+    telegram_id = callback.from_user.id
+    lang = db.get_user_language(telegram_id)
+
+    await callback.message.delete()
+    await callback.answer(get_text('kept_in_favorites', lang))
+
 # Main function
 async def main():
     """Start bot"""
