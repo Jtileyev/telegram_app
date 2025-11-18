@@ -5,8 +5,10 @@ define('DB_PATH', __DIR__ . '/../database/rental.db');
 define('UPLOADS_PATH', __DIR__ . '/../uploads/apartments/');
 define('SESSION_LIFETIME', 3600); // 1 hour
 
-// Start session
-session_start();
+// Start session (avoid duplicate starts when embedding other scripts)
+if (session_status() === PHP_SESSION_NONE) {
+    session_start();
+}
 
 // Check if user is logged in
 function isLoggedIn() {

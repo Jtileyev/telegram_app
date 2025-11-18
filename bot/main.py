@@ -17,9 +17,8 @@ from locales import get_text
 logging.basicConfig(level=logging.INFO)
 logger = logging.getLogger(__name__)
 
-# Initialize bot and dispatcher
-BOT_TOKEN = "8598342556:AAGdy5OpK3qJaYYtsqkmX_BPrHDJf5XuDNI"  # Set your token here
-bot = Bot(token=BOT_TOKEN)
+# Bot and dispatcher will be initialized after database
+bot = None
 storage = MemoryStorage()
 dp = Dispatcher(storage=storage)
 router = Router()
@@ -1117,8 +1116,21 @@ async def keep_favorite(callback: CallbackQuery):
 # Main function
 async def main():
     """Start bot"""
+    global bot
+
+    import config
+
     # Initialize database
     db.init_db()
+
+    # Get bot token from database and initialize bot
+    try:
+        bot_token = config.get_bot_token()
+        bot = Bot(token=bot_token)
+        logger.info("Bot initialized with token from database")
+    except ValueError as e:
+        logger.error(f"Failed to get bot token: {e}")
+        return
 
     # Include router
     dp.include_router(router)

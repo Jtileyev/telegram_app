@@ -1,8 +1,18 @@
 # Bot configuration
 import os
+import sys
+from pathlib import Path
 
-# Telegram Bot Token (get from @BotFather)
-BOT_TOKEN = os.getenv('BOT_TOKEN', '8598342556:AAGdy5OpK3qJaYYtsqkmX_BPrHDJf5XuDNI')
+# Add parent directory to path to import database module
+sys.path.insert(0, str(Path(__file__).parent))
+import database as db
+
+def get_bot_token():
+    """Get bot token from database"""
+    token = db.get_setting('bot_token')
+    if not token:
+        raise ValueError("BOT_TOKEN not found in database settings. Please add it to the settings table with key 'bot_token'")
+    return token
 
 # Database path
 DATABASE_PATH = os.path.join(os.path.dirname(__file__), '..', 'database', 'rental.db')
