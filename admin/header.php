@@ -60,6 +60,12 @@
                             </a>
                         </li>
                         <li class="nav-item">
+                            <a class="nav-link <?= basename($_SERVER['PHP_SELF']) == 'reviews.php' ? 'active' : '' ?>" href="reviews.php">
+                                <i class="bi bi-star me-2"></i>Отзывы
+                            </a>
+                        </li>
+                        <?php if (isAdmin()): ?>
+                        <li class="nav-item">
                             <a class="nav-link <?= basename($_SERVER['PHP_SELF']) == 'users.php' ? 'active' : '' ?>" href="users.php">
                                 <i class="bi bi-people me-2"></i>Пользователи
                             </a>
@@ -67,11 +73,6 @@
                         <li class="nav-item">
                             <a class="nav-link <?= basename($_SERVER['PHP_SELF']) == 'landlords.php' ? 'active' : '' ?>" href="landlords.php">
                                 <i class="bi bi-person-badge me-2"></i>Арендодатели
-                            </a>
-                        </li>
-                        <li class="nav-item">
-                            <a class="nav-link <?= basename($_SERVER['PHP_SELF']) == 'reviews.php' ? 'active' : '' ?>" href="reviews.php">
-                                <i class="bi bi-star me-2"></i>Отзывы
                             </a>
                         </li>
                         <li class="nav-item">
@@ -99,6 +100,7 @@
                                 <i class="bi bi-database me-2"></i>SQLite Browser
                             </a>
                         </li>
+                        <?php endif; ?>
                         <li class="nav-item mt-4">
                             <a class="nav-link text-danger" href="logout.php">
                                 <i class="bi bi-box-arrow-right me-2"></i>Выход

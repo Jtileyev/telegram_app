@@ -14,12 +14,22 @@ if (isset($_GET['approve']) && is_numeric($_GET['approve'])) {
 
     if ($request) {
         // Create landlord
-        $stmt = $db->prepare("INSERT INTO landlords (telegram_id, full_name, phone) VALUES (?, ?, ?)");
-        $stmt->execute([$request['telegram_id'], $request['full_name'], $request['phone']]);
+        $stmt = $db->prepare("INSERT INTO landlords (telegram_id, full_name, phone, email) VALUES (?, ?, ?, ?)");
+        $stmt->execute([$request['telegram_id'], $request['full_name'], $request['phone'], $request['email']]);
 
         // Update request status
         $stmt = $db->prepare("UPDATE landlord_requests SET status = 'approved', processed_at = CURRENT_TIMESTAMP WHERE id = ?");
         $stmt->execute([$_GET['approve']]);
+
+        // Send Telegram notification
+        $notifyScript = __DIR__ . '/../bot/notify_landlord.py';
+        $command = sprintf(
+            "python3 %s %d %s > /dev/null 2>&1 &",
+            escapeshellarg($notifyScript),
+            $request['telegram_id'],
+            escapeshellarg($request['full_name'])
+        );
+        exec($command);
 
         setFlash('success', 'Заявка одобрена, арендодатель создан');
     }
@@ -55,6 +65,7 @@ include 'header.php';
                         <th>Telegram ID</th>
                         <th>ФИО</th>
                         <th>Телефон</th>
+                        <th>Email</th>
                         <th>Статус</th>
                         <th>Создана</th>
                         <th>Обработана</th>
@@ -68,6 +79,7 @@ include 'header.php';
                         <td><?= $request['telegram_id'] ?></td>
                         <td><strong><?= sanitize($request['full_name']) ?></strong></td>
                         <td><?= $request['phone'] ?></td>
+                        <td><?= sanitize($request['email']) ?></td>
                         <td>
                             <?php
                             $statusClasses = [

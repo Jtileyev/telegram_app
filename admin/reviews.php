@@ -15,13 +15,23 @@ if (isset($_GET['toggle_visibility']) && is_numeric($_GET['toggle_visibility']))
     exit;
 }
 
-$stmt = $db->query("
+$query = "
     SELECT r.*, u.full_name as user_name, a.title_ru as apartment_title, a.address
     FROM reviews r
     JOIN users u ON r.user_id = u.id
     JOIN apartments a ON r.apartment_id = a.id
-    ORDER BY r.created_at DESC
-");
+    WHERE 1=1
+";
+
+// Filter by landlord if not admin
+if (isLandlord()) {
+    $query .= " AND a.landlord_id = ?";
+    $stmt = $db->prepare($query . " ORDER BY r.created_at DESC");
+    $stmt->execute([getLandlordId()]);
+} else {
+    $stmt = $db->query($query . " ORDER BY r.created_at DESC");
+}
+
 $reviews = $stmt->fetchAll();
 
 include 'header.php';

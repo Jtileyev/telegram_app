@@ -26,15 +26,25 @@ if (isset($_GET['activate']) && is_numeric($_GET['activate'])) {
 }
 
 // Get apartments
-$stmt = $db->query("
+$query = "
     SELECT a.*, l.full_name as landlord_name, l.phone as landlord_phone,
            c.name_ru as city_name, d.name_ru as district_name
     FROM apartments a
     JOIN landlords l ON a.landlord_id = l.id
     JOIN cities c ON a.city_id = c.id
     JOIN districts d ON a.district_id = d.id
-    ORDER BY a.created_at DESC
-");
+    WHERE 1=1
+";
+
+// Filter by landlord if not admin
+if (isLandlord()) {
+    $query .= " AND a.landlord_id = ?";
+    $stmt = $db->prepare($query . " ORDER BY a.created_at DESC");
+    $stmt->execute([getLandlordId()]);
+} else {
+    $stmt = $db->query($query . " ORDER BY a.created_at DESC");
+}
+
 $apartments = $stmt->fetchAll();
 
 include 'header.php';

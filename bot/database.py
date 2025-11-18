@@ -139,8 +139,7 @@ def get_district_by_id(district_id: int):
     return dict(district) if district else None
 
 # Apartment operations
-def get_apartments(city_id: int = None, district_id: int = None,
-                   check_in: str = None, check_out: str = None):
+def get_apartments(city_id: int = None, district_id: int = None):
     """Get available apartments with filters"""
     conn = get_connection()
 
@@ -163,21 +162,6 @@ def get_apartments(city_id: int = None, district_id: int = None,
     if district_id:
         query += " AND a.district_id = ?"
         params.append(district_id)
-
-    if check_in and check_out:
-        # Exclude apartments with overlapping bookings
-        query += """
-            AND a.id NOT IN (
-                SELECT apartment_id FROM bookings
-                WHERE status IN ('pending', 'confirmed')
-                AND (
-                    (check_in_date <= ? AND check_out_date > ?)
-                    OR (check_in_date < ? AND check_out_date >= ?)
-                    OR (check_in_date >= ? AND check_out_date <= ?)
-                )
-            )
-        """
-        params.extend([check_out, check_in, check_out, check_in, check_in, check_out])
 
     query += " ORDER BY a.rating DESC, a.created_at DESC"
 
@@ -286,12 +270,12 @@ def update_booking_status(booking_id: int, status: str):
     conn.close()
 
 def check_apartment_availability(apartment_id: int, check_in: str, check_out: str):
-    """Check if apartment is available for given dates"""
+    """Check if apartment is available for given dates (only confirmed bookings block dates)"""
     conn = get_connection()
     cursor = conn.execute("""
         SELECT COUNT(*) as count FROM bookings
         WHERE apartment_id = ?
-        AND status IN ('pending', 'confirmed')
+        AND status = 'confirmed'
         AND (
             (check_in_date <= ? AND check_out_date > ?)
             OR (check_in_date < ? AND check_out_date >= ?)
@@ -301,6 +285,30 @@ def check_apartment_availability(apartment_id: int, check_in: str, check_out: st
     count = cursor.fetchone()['count']
     conn.close()
     return count == 0
+
+def get_booked_dates(apartment_id: int):
+    """Get all booked dates for apartment (only confirmed bookings)"""
+    from datetime import datetime, timedelta
+
+    conn = get_connection()
+    cursor = conn.execute("""
+        SELECT check_in_date, check_out_date
+        FROM bookings
+        WHERE apartment_id = ? AND status = 'confirmed'
+    """, (apartment_id,))
+
+    booked_dates = set()
+    for row in cursor.fetchall():
+        check_in = datetime.strptime(row['check_in_date'], "%Y-%m-%d").date()
+        check_out = datetime.strptime(row['check_out_date'], "%Y-%m-%d").date()
+
+        current = check_in
+        while current < check_out:
+            booked_dates.add(current.isoformat())
+            current += timedelta(days=1)
+
+    conn.close()
+    return list(booked_dates)
 
 # Favorites operations
 def add_to_favorites(user_id: int, apartment_id: int):
@@ -419,12 +427,12 @@ def can_leave_review(user_id: int, booking_id: int):
     return result
 
 # Landlord operations
-def create_landlord_request(telegram_id: int, full_name: str, phone: str):
+def create_landlord_request(telegram_id: int, full_name: str, phone: str, email: str):
     """Create landlord connection request"""
     conn = get_connection()
     conn.execute(
-        "INSERT INTO landlord_requests (telegram_id, full_name, phone) VALUES (?, ?, ?)",
-        (telegram_id, full_name, phone)
+        "INSERT INTO landlord_requests (telegram_id, full_name, phone, email) VALUES (?, ?, ?, ?)",
+        (telegram_id, full_name, phone, email)
     )
     conn.commit()
     conn.close()

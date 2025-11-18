@@ -28,15 +28,29 @@ $query = "
     JOIN users u ON b.user_id = u.id
     JOIN apartments a ON b.apartment_id = a.id
     JOIN landlords l ON b.landlord_id = l.id
+    WHERE 1=1
 ";
 
-if ($statusFilter !== 'all') {
-    $query .= " WHERE b.status = ?";
+// Filter by landlord if not admin
+if (isLandlord()) {
+    $query .= " AND b.landlord_id = ?";
+    $params = [getLandlordId()];
+
+    if ($statusFilter !== 'all') {
+        $query .= " AND b.status = ?";
+        $params[] = $statusFilter;
+    }
+
     $stmt = $db->prepare($query . " ORDER BY b.created_at DESC");
-    $stmt->execute([$statusFilter]);
+    $stmt->execute($params);
 } else {
-    $query .= " ORDER BY b.created_at DESC";
-    $stmt = $db->query($query);
+    if ($statusFilter !== 'all') {
+        $query .= " AND b.status = ?";
+        $stmt = $db->prepare($query . " ORDER BY b.created_at DESC");
+        $stmt->execute([$statusFilter]);
+    } else {
+        $stmt = $db->query($query . " ORDER BY b.created_at DESC");
+    }
 }
 
 $bookings = $stmt->fetchAll();

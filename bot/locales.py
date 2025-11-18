@@ -44,6 +44,10 @@ MESSAGES = {
 📍 Район: {district}
 📅 Заселение: {check_in}
 📅 Выезд: {check_out}''',
+        'active_filters_no_dates': '''📌 Активные фильтры:
+━━━━━━━━━━━━━━━━━━━
+🏙 Город: {city}
+📍 Район: {district}''',
         'available_apartments': '🏠 Доступные варианты ({count})',
         'no_apartments': '''🔍 По вашим фильтрам не найдено квартир
 
@@ -145,6 +149,8 @@ MESSAGES = {
 С вами скоро свяжутся.''',
         'enter_landlord_name': '📝 Введите ваше ФИО:',
         'enter_landlord_phone': '📱 Введите номер телефона:',
+        'enter_landlord_email': '📧 Введите ваш email:\n(Он понадобится для входа в панель управления)',
+        'invalid_email': '⚠️ Некорректный email\nИспользуйте формат: example@domain.com',
 
         # Errors
         'error_occurred': '''❌ Произошла ошибка
@@ -217,6 +223,10 @@ MESSAGES = {
 📍 Аудан: {district}
 📅 Кіру: {check_in}
 📅 Шығу: {check_out}''',
+        'active_filters_no_dates': '''📌 Белсенді сүзгілер:
+━━━━━━━━━━━━━━━━━━━
+🏙 Қала: {city}
+📍 Аудан: {district}''',
         'available_apartments': '🏠 Қолжетімді нұсқалар ({count})',
         'no_apartments': '''🔍 Сүзгілеріңіз бойынша пәтер табылмады
 
@@ -318,6 +328,8 @@ MESSAGES = {
 Сізбен жақын арада байланысады.''',
         'enter_landlord_name': '📝 Толық атыңызды енгізіңіз:',
         'enter_landlord_phone': '📱 Телефон нөміріңізді енгізіңіз:',
+        'enter_landlord_email': '📧 Email енгізіңіз:\n(Басқару панеліне кіру үшін қажет)',
+        'invalid_email': '⚠️ Email дұрыс емес\nФорматты пайдаланыңыз: example@domain.com',
 
         # Errors
         'error_occurred': '''❌ Қате орын алды
