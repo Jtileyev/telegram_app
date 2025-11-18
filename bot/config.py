@@ -2,7 +2,7 @@
 import os
 
 # Telegram Bot Token (get from @BotFather)
-BOT_TOKEN = os.getenv('BOT_TOKEN', 'YOUR_BOT_TOKEN_HERE')
+BOT_TOKEN = os.getenv('BOT_TOKEN', '8598342556:AAGdy5OpK3qJaYYtsqkmX_BPrHDJf5XuDNI')
 
 # Database path
 DATABASE_PATH = os.path.join(os.path.dirname(__file__), '..', 'database', 'rental.db')

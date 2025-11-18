@@ -18,7 +18,7 @@ logging.basicConfig(level=logging.INFO)
 logger = logging.getLogger(__name__)
 
 # Initialize bot and dispatcher
-BOT_TOKEN = "YOUR_BOT_TOKEN_HERE"  # Set your token here
+BOT_TOKEN = "8598342556:AAGdy5OpK3qJaYYtsqkmX_BPrHDJf5XuDNI"  # Set your token here
 bot = Bot(token=BOT_TOKEN)
 storage = MemoryStorage()
 dp = Dispatcher(storage=storage)
