@@ -1,0 +1,8 @@
+# Telegram Bot Dependencies
+aiogram==3.3.0
+
+# Password Hashing
+bcrypt==4.1.2
+
+# Additional dependencies (if needed)
+# Add other packages here as needed

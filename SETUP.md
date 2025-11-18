@@ -5,11 +5,22 @@
 ### Для Python (бот и скрипты)
 
 ```bash
-# Установка bcrypt для безопасного хеширования паролей
-pip install bcrypt
+# Установка всех зависимостей из requirements.txt
+pip install -r requirements.txt
 
-# Или если используете venv
-source venv/bin/activate
+# Или если используете venv (рекомендуется)
+python3 -m venv venv
+source venv/bin/activate  # Linux/Mac
+# или
+venv\Scripts\activate     # Windows
+
+pip install -r requirements.txt
+```
+
+### Минимальная установка (только bcrypt)
+
+```bash
+# Если нужен только bcrypt для хеширования паролей
 pip install bcrypt
 ```
 
