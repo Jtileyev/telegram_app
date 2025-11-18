@@ -28,7 +28,8 @@ def get_main_menu_keyboard(lang: str = 'ru'):
             [
                 KeyboardButton(text=get_text('btn_language', lang)),
                 KeyboardButton(text=get_text('btn_landlords', lang))
-            ]
+            ],
+            [KeyboardButton(text=get_text('btn_clear_chat', lang))]
         ],
         resize_keyboard=True,
         one_time_keyboard=False
@@ -66,6 +67,13 @@ def get_cities_keyboard(cities: list, lang: str = 'ru'):
 def get_districts_keyboard(districts: list, lang: str = 'ru'):
     """Districts selection inline keyboard"""
     buttons = []
+
+    # Add "All districts" button at the top
+    buttons.append([InlineKeyboardButton(
+        text=get_text('all_districts', lang),
+        callback_data="district_all"
+    )])
+
     row = []
     for i, district in enumerate(districts):
         name = district['name_ru'] if lang == 'ru' else district['name_kk']
@@ -167,11 +175,30 @@ def get_search_filters_keyboard(filters: dict, count: int, lang: str = 'ru'):
     return InlineKeyboardMarkup(inline_keyboard=buttons)
 
 def get_apartment_card_keyboard(apartment_id: int, is_favorite: bool, lang: str = 'ru',
-                                 has_prev: bool = False, has_next: bool = False):
+                                 has_prev: bool = False, has_next: bool = False,
+                                 photo_index: int = 0, photo_count: int = 0,
+                                 has_prev_photo: bool = False, has_next_photo: bool = False):
     """Apartment card inline keyboard"""
     buttons = []
 
-    # Navigation buttons
+    # Photo navigation buttons (if multiple photos)
+    if photo_count > 1:
+        photo_nav_row = []
+        if has_prev_photo:
+            photo_nav_row.append(InlineKeyboardButton(text="◀️ Фото", callback_data=f"photo_prev_{apartment_id}"))
+
+        # Photo counter in the middle
+        photo_nav_row.append(InlineKeyboardButton(
+            text=f"{photo_index + 1}/{photo_count}",
+            callback_data="ignore"
+        ))
+
+        if has_next_photo:
+            photo_nav_row.append(InlineKeyboardButton(text="Фото ▶️", callback_data=f"photo_next_{apartment_id}"))
+
+        buttons.append(photo_nav_row)
+
+    # Apartment navigation buttons
     nav_row = []
     if has_prev:
         nav_row.append(InlineKeyboardButton(text="⬅️", callback_data=f"apt_prev_{apartment_id}"))

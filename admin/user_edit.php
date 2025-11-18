@@ -79,7 +79,11 @@ if ($_SERVER['REQUEST_METHOD'] === 'POST') {
 }
 
 // Parse current roles
-$currentRoles = $user ? json_decode($user['roles'], true) : [];
+$currentRoles = [];
+if ($user && !empty($user['roles'])) {
+    $decoded = json_decode($user['roles'], true);
+    $currentRoles = is_array($decoded) ? $decoded : [];
+}
 
 include 'header.php';
 ?>
@@ -179,10 +183,10 @@ include 'header.php';
                     <?php if ($user): ?>
                     <div class="mb-3">
                         <label class="form-label">Создан</label>
-                        <input type="text" class="form-control" value="<?= date('d.m.Y H:i', strtotime($user['created_at'])) ?>" disabled>
+                        <input type="text" class="form-control" value="<?= $user['created_at'] ? date('d.m.Y H:i', strtotime($user['created_at'])) : 'Н/Д' ?>" disabled>
                     </div>
 
-                    <?php if ($user['last_login']): ?>
+                    <?php if (!empty($user['last_login'])): ?>
                     <div class="mb-3">
                         <label class="form-label">Последний вход</label>
                         <input type="text" class="form-control" value="<?= date('d.m.Y H:i', strtotime($user['last_login'])) ?>" disabled>
