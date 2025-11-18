@@ -63,7 +63,13 @@ if (!is_dir(UPLOADS_PATH)) {
 
 // Move file
 if (!move_uploaded_file($file['tmp_name'], $fullPath)) {
-    echo json_encode(['success' => false, 'error' => 'Failed to save file']);
+    echo json_encode(['success' => false, 'error' => 'Failed to save file to: ' . $fullPath]);
+    exit;
+}
+
+// Verify file was saved
+if (!file_exists($fullPath)) {
+    echo json_encode(['success' => false, 'error' => 'File was not saved: ' . $fullPath]);
     exit;
 }
 
@@ -83,5 +89,7 @@ echo json_encode([
     'success' => true,
     'photo_id' => $photo_id,
     'photo_url' => '../' . $relativePath,
-    'is_main' => $is_main
+    'is_main' => $is_main,
+    'debug_full_path' => $fullPath,
+    'debug_relative_path' => $relativePath
 ]);
