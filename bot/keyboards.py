@@ -182,9 +182,15 @@ def get_apartment_card_keyboard(apartment_id: int, is_favorite: bool, lang: str 
     # Apartment navigation buttons
     nav_row = []
     if has_prev:
-        nav_row.append(InlineKeyboardButton(text="⬅️", callback_data=f"apt_prev_{apartment_id}"))
+        nav_row.append(InlineKeyboardButton(
+            text=get_text('btn_prev_apartment', lang),
+            callback_data=f"apt_prev_{apartment_id}"
+        ))
     if has_next:
-        nav_row.append(InlineKeyboardButton(text="➡️", callback_data=f"apt_next_{apartment_id}"))
+        nav_row.append(InlineKeyboardButton(
+            text=get_text('btn_next_apartment', lang),
+            callback_data=f"apt_next_{apartment_id}"
+        ))
     if nav_row:
         buttons.append(nav_row)
 

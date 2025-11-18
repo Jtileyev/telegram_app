@@ -74,6 +74,8 @@ MESSAGES = {
         'btn_in_favorites': '⭐ В избранном',
         'btn_read_reviews': '📝 Читать отзывы',
         'btn_view_map': '🗺 Показать на карте',
+        'btn_prev_apartment': '⬅️ Предыдущая',
+        'btn_next_apartment': 'Следующая ➡️',
         'added_to_favorites': '✅ Квартира добавлена в избранное',
         'removed_from_favorites': '✅ Квартира удалена из избранного',
 
@@ -256,6 +258,8 @@ MESSAGES = {
         'btn_in_favorites': '⭐ Таңдаулыларда',
         'btn_read_reviews': '📝 Пікірлерді оқу',
         'btn_view_map': '🗺 Картадан көру',
+        'btn_prev_apartment': '⬅️ Алдыңғы',
+        'btn_next_apartment': 'Келесі ➡️',
         'added_to_favorites': '✅ Пәтер таңдаулыларға қосылды',
         'removed_from_favorites': '✅ Пәтер таңдаулылардан алынды',
 

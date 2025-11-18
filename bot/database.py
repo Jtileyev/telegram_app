@@ -276,7 +276,14 @@ def get_apartment_photos(apartment_id: int):
         "SELECT photo_path FROM apartment_photos WHERE apartment_id = ? ORDER BY is_main DESC, sort_order",
         (apartment_id,)
     )
-    photos = [row['photo_path'] for row in cursor.fetchall()]
+    photos = []
+    project_root = Path(__file__).parent.parent
+    for row in cursor.fetchall():
+        photo_path = row['photo_path']
+        # Convert relative path to absolute path
+        if not Path(photo_path).is_absolute():
+            photo_path = str(project_root / photo_path)
+        photos.append(photo_path)
     conn.close()
     return photos
 

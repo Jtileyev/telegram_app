@@ -109,6 +109,33 @@ def format_apartment_card(apartment: dict, lang: str = 'ru') -> str:
 
     return text
 
+async def send_apartment_card(message: Message, apartment: dict, keyboard, lang: str):
+    """Send apartment card with photos and keyboard"""
+    text = format_apartment_card(apartment, lang)
+    photos = apartment.get('photos', [])
+
+    if photos:
+        try:
+            # Send photos with caption as media group
+            media_group = []
+            for i, photo_path in enumerate(photos[:10]):  # Telegram limit: 10 photos max
+                photo = FSInputFile(photo_path)
+                if i == 0:
+                    # First photo gets the caption
+                    media_group.append(InputMediaPhoto(media=photo, caption=text, parse_mode="Markdown"))
+                else:
+                    media_group.append(InputMediaPhoto(media=photo))
+
+            await message.answer_media_group(media=media_group)
+        except Exception as e:
+            logger.error(f"Error sending photos: {e}")
+            await message.answer(text, parse_mode="Markdown")
+    else:
+        await message.answer(text, parse_mode="Markdown")
+
+    # Always send keyboard as separate message for consistency
+    await message.answer("👇 Действия:", reply_markup=keyboard)
+
 # Command handlers
 @router.message(CommandStart())
 async def cmd_start(message: Message, state: FSMContext):
@@ -308,8 +335,6 @@ async def show_favorite_apartment(message: Message, state: FSMContext, index: in
     user = db.get_user(telegram_id)
     lang = user['language']
 
-    text = format_apartment_card(apartment, lang)
-
     has_prev = index > 0
     has_next = index < len(favorites) - 1
 
@@ -321,34 +346,7 @@ async def show_favorite_apartment(message: Message, state: FSMContext, index: in
         has_next=has_next
     )
 
-    photos = apartment.get('photos', [])
-
-    if photos:
-        try:
-            if len(photos) == 1:
-                # Single photo
-                photo = FSInputFile(photos[0])
-                await message.answer_photo(photo, caption=text, parse_mode="Markdown", reply_markup=keyboard)
-            else:
-                # Multiple photos - send as media group (up to 10 photos)
-                media_group = []
-                for i, photo_path in enumerate(photos[:10]):  # Telegram limit: 10 photos max
-                    photo = FSInputFile(photo_path)
-                    if i == 0:
-                        # First photo gets the caption
-                        media_group.append(InputMediaPhoto(media=photo, caption=text, parse_mode="Markdown"))
-                    else:
-                        media_group.append(InputMediaPhoto(media=photo))
-
-                await message.answer_media_group(media=media_group)
-                # Send keyboard separately as media groups can't have inline keyboards
-                await message.answer("👇 Действия:", reply_markup=keyboard)
-        except Exception as e:
-            logger.error(f"Error sending photos: {e}")
-            await message.answer(text, parse_mode="Markdown", reply_markup=keyboard)
-    else:
-        await message.answer(text, parse_mode="Markdown", reply_markup=keyboard)
-
+    await send_apartment_card(message, apartment, keyboard, lang)
     await state.update_data(fav_index=index)
 
 @router.message(F.text.in_([
@@ -621,8 +619,6 @@ async def show_apartment(message: Message, state: FSMContext, index: int, user: 
     apartment = apartments[index]
     lang = user['language']
 
-    text = format_apartment_card(apartment, lang)
-
     has_prev = index > 0
     has_next = index < len(apartments) - 1
     is_fav = db.is_favorite(user['id'], apartment['id'])
@@ -635,34 +631,7 @@ async def show_apartment(message: Message, state: FSMContext, index: int, user: 
         has_next=has_next
     )
 
-    photos = apartment.get('photos', [])
-
-    if photos:
-        try:
-            if len(photos) == 1:
-                # Single photo
-                photo = FSInputFile(photos[0])
-                await message.answer_photo(photo, caption=text, parse_mode="Markdown", reply_markup=keyboard)
-            else:
-                # Multiple photos - send as media group (up to 10 photos)
-                media_group = []
-                for i, photo_path in enumerate(photos[:10]):  # Telegram limit: 10 photos max
-                    photo = FSInputFile(photo_path)
-                    if i == 0:
-                        # First photo gets the caption
-                        media_group.append(InputMediaPhoto(media=photo, caption=text, parse_mode="Markdown"))
-                    else:
-                        media_group.append(InputMediaPhoto(media=photo))
-
-                await message.answer_media_group(media=media_group)
-                # Send keyboard separately as media groups can't have inline keyboards
-                await message.answer("👇 Действия:", reply_markup=keyboard)
-        except Exception as e:
-            logger.error(f"Error sending photos: {e}")
-            await message.answer(text, parse_mode="Markdown", reply_markup=keyboard)
-    else:
-        await message.answer(text, parse_mode="Markdown", reply_markup=keyboard)
-
+    await send_apartment_card(message, apartment, keyboard, lang)
     await state.update_data(apt_index=index)
 
 @router.callback_query(F.data.startswith("apt_"))
