@@ -3,6 +3,7 @@ require_once 'config.php';
 requireLogin();
 
 $pageTitle = 'Пользователи';
+$pageActions = '<a href="user_edit.php" class="btn btn-primary"><i class="bi bi-plus-circle me-1"></i>Добавить</a>';
 
 $db = getDB();
 
@@ -84,12 +85,19 @@ include 'header.php';
                             <?= date('d.m.Y H:i', strtotime($user['created_at'])) ?>
                         </td>
                         <td>
-                            <a href="?delete=<?= $user['id'] ?>"
-                               class="btn btn-sm btn-outline-danger"
-                               onclick="return confirm('Вы уверены, что хотите удалить пользователя <?= sanitize($user['full_name'] ?: 'ID: ' . $user['id']) ?>?\n\nБудут также удалены:\n- Все бронирования (<?= $user['bookings_count'] ?>)\n- Избранное (<?= $user['favorites_count'] ?>)\n\nЭто действие необратимо!')"
-                               title="Удалить">
-                                <i class="bi bi-trash"></i>
-                            </a>
+                            <div class="btn-group" role="group">
+                                <a href="user_edit.php?id=<?= $user['id'] ?>"
+                                   class="btn btn-sm btn-outline-primary"
+                                   title="Редактировать">
+                                    <i class="bi bi-pencil"></i>
+                                </a>
+                                <a href="?delete=<?= $user['id'] ?>"
+                                   class="btn btn-sm btn-outline-danger"
+                                   onclick="return confirm('Вы уверены, что хотите удалить пользователя <?= sanitize($user['full_name'] ?: 'ID: ' . $user['id']) ?>?\n\nБудут также удалены:\n- Все бронирования (<?= $user['bookings_count'] ?>)\n- Избранное (<?= $user['favorites_count'] ?>)\n\nЭто действие необратимо!')"
+                                   title="Удалить">
+                                    <i class="bi bi-trash"></i>
+                                </a>
+                            </div>
                         </td>
                     </tr>
                     <?php endforeach; ?>
