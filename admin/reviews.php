@@ -24,10 +24,10 @@ $query = "
 ";
 
 // Filter by landlord if not admin
-if (isLandlord()) {
+if (isLandlord() && !isAdmin()) {
     $query .= " AND a.landlord_id = ?";
     $stmt = $db->prepare($query . " ORDER BY r.created_at DESC");
-    $stmt->execute([getLandlordId()]);
+    $stmt->execute([getUserId()]);
 } else {
     $stmt = $db->query($query . " ORDER BY r.created_at DESC");
 }

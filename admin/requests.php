@@ -13,9 +13,24 @@ if (isset($_GET['approve']) && is_numeric($_GET['approve'])) {
     $request = $stmt->fetch();
 
     if ($request) {
-        // Create landlord
-        $stmt = $db->prepare("INSERT INTO landlords (telegram_id, full_name, phone, email) VALUES (?, ?, ?, ?)");
-        $stmt->execute([$request['telegram_id'], $request['full_name'], $request['phone'], $request['email']]);
+        // Check if user already exists
+        $stmt = $db->prepare("SELECT id, roles FROM users WHERE email = ? OR telegram_id = ?");
+        $stmt->execute([$request['email'], $request['telegram_id']]);
+        $existing = $stmt->fetch();
+
+        if ($existing) {
+            // Add landlord role to existing user
+            $roles = json_decode($existing['roles'], true);
+            if (!in_array('landlord', $roles)) {
+                $roles[] = 'landlord';
+                $stmt = $db->prepare("UPDATE users SET roles = ?, full_name = ?, phone = ? WHERE id = ?");
+                $stmt->execute([json_encode($roles), $request['full_name'], $request['phone'], $existing['id']]);
+            }
+        } else {
+            // Create new user with landlord role
+            $stmt = $db->prepare("INSERT INTO users (telegram_id, full_name, phone, email, roles, is_active) VALUES (?, ?, ?, ?, ?, 1)");
+            $stmt->execute([$request['telegram_id'], $request['full_name'], $request['phone'], $request['email'], json_encode(['landlord'])]);
+        }
 
         // Update request status
         $stmt = $db->prepare("UPDATE landlord_requests SET status = 'approved', processed_at = CURRENT_TIMESTAMP WHERE id = ?");
