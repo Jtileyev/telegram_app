@@ -8,15 +8,44 @@ define('SESSION_LIFETIME', 3600); // 1 hour
 // Start session
 session_start();
 
-// Check if admin is logged in
+// Check if user is logged in
 function isLoggedIn() {
-    return isset($_SESSION['admin_id']) && !empty($_SESSION['admin_id']);
+    return isset($_SESSION['user_id']) && !empty($_SESSION['user_id']) && isset($_SESSION['user_role']);
+}
+
+// Get current user role ('admin' or 'landlord')
+function getUserRole() {
+    return $_SESSION['user_role'] ?? null;
+}
+
+// Get current landlord ID (if role is landlord)
+function getLandlordId() {
+    return $_SESSION['landlord_id'] ?? null;
+}
+
+// Check if current user is admin
+function isAdmin() {
+    return isLoggedIn() && getUserRole() === 'admin';
+}
+
+// Check if current user is landlord
+function isLandlord() {
+    return isLoggedIn() && getUserRole() === 'landlord';
 }
 
 // Redirect if not logged in
 function requireLogin() {
     if (!isLoggedIn()) {
         header('Location: login.php');
+        exit;
+    }
+}
+
+// Require admin role
+function requireAdmin() {
+    requireLogin();
+    if (!isAdmin()) {
+        header('Location: index.php');
         exit;
     }
 }
