@@ -716,23 +716,41 @@ async def start_booking(callback: CallbackQuery, state: FSMContext):
     data = await state.get_data()
     filters = data.get('filters', {})
 
-    # Check availability
-    if not db.check_apartment_availability(apartment_id, filters.get('check_in'), filters.get('check_out')):
-        await callback.answer(get_text('apartment_booked', lang), show_alert=True)
-        return
-
+    # Save apartment ID for booking
     await state.update_data(booking_apartment_id=apartment_id)
 
-    # If user has phone, create booking directly
-    if user.get('phone'):
-        await create_booking_request(callback.message, state, user)
+    # Check if dates are already selected
+    if filters.get('check_in') and filters.get('check_out'):
+        # Dates already selected, check availability
+        if not db.check_apartment_availability(apartment_id, filters.get('check_in'), filters.get('check_out')):
+            await callback.answer(get_text('apartment_booked', lang), show_alert=True)
+            return
+
+        # If user has phone, create booking directly
+        if user.get('phone'):
+            await create_booking_request(callback.message, state, user)
+        else:
+            # Request contact
+            await callback.message.answer(
+                get_text('enter_phone', lang),
+                reply_markup=get_contact_keyboard(lang)
+            )
+            await state.set_state(BookingStates.waiting_contact)
     else:
-        # Request contact
+        # Dates not selected, request check-in date
+        apartment = db.get_apartment_by_id(apartment_id)
+        min_date = datetime.now()
+
         await callback.message.answer(
-            get_text('enter_phone', lang),
-            reply_markup=get_contact_keyboard(lang)
+            get_text('select_check_in', lang),
+            reply_markup=get_calendar_keyboard(
+                min_date.year, min_date.month, lang,
+                min_date=min_date,
+                calendar_type='check_in',
+                apartment_id=apartment_id
+            )
         )
-        await state.set_state(BookingStates.waiting_contact)
+        await state.set_state(BookingStates.confirming)
 
     await callback.answer()
 
@@ -944,14 +962,69 @@ async def select_date(callback: CallbackQuery, state: FSMContext):
     date_str = parts[2]
 
     telegram_id = callback.from_user.id
-    lang = db.get_user_language(telegram_id)
+    user = db.get_user(telegram_id)
+    lang = user['language']
 
     data = await state.get_data()
     filters = data.get('filters', {})
     filters[calendar_type] = date_str
     await state.update_data(filters=filters)
 
-    await callback.message.edit_text(get_text(f'{calendar_type}_selected', lang, date=date_str))
+    current_state = await state.get_state()
+
+    # If we're in booking flow
+    if current_state == BookingStates.confirming:
+        if calendar_type == 'check_in':
+            # Check-in date selected, now select check-out date
+            apartment_id = data.get('booking_apartment_id')
+            check_in_date = datetime.strptime(date_str, "%Y-%m-%d")
+            min_checkout = check_in_date + timedelta(days=1)
+
+            await callback.message.edit_text(
+                get_text('select_check_out', lang),
+                reply_markup=get_calendar_keyboard(
+                    min_checkout.year, min_checkout.month, lang,
+                    min_date=min_checkout,
+                    calendar_type='check_out',
+                    apartment_id=apartment_id
+                )
+            )
+        elif calendar_type == 'check_out':
+            # Check-out date selected, validate and continue
+            check_in = filters.get('check_in')
+            check_out = date_str
+            apartment_id = data.get('booking_apartment_id')
+
+            # Validate dates
+            check_in_date = datetime.strptime(check_in, "%Y-%m-%d")
+            check_out_date = datetime.strptime(check_out, "%Y-%m-%d")
+
+            if check_out_date <= check_in_date:
+                await callback.answer(get_text('invalid_dates', lang), show_alert=True)
+                return
+
+            # Check availability
+            if not db.check_apartment_availability(apartment_id, check_in, check_out):
+                await callback.answer(get_text('apartment_booked', lang), show_alert=True)
+                return
+
+            # Dates valid and apartment available
+            await callback.message.delete()
+
+            # If user has phone, create booking
+            if user.get('phone'):
+                await create_booking_request(callback.message, state, user)
+            else:
+                # Request contact
+                await callback.message.answer(
+                    get_text('enter_phone', lang),
+                    reply_markup=get_contact_keyboard(lang)
+                )
+                await state.set_state(BookingStates.waiting_contact)
+    else:
+        # Regular search flow (not booking)
+        await callback.message.edit_text(get_text(f'{calendar_type}_selected', lang, date=date_str))
+
     await callback.answer()
 
 @router.callback_query(F.data.startswith("calendar_back_"))
