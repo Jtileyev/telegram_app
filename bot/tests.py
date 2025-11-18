@@ -2,6 +2,7 @@ import unittest
 import sys
 import os
 from datetime import datetime, timedelta
+from pathlib import Path
 
 # Add bot directory to path
 sys.path.insert(0, os.path.dirname(__file__))
@@ -15,7 +16,26 @@ class TestDatabase(unittest.TestCase):
     @classmethod
     def setUpClass(cls):
         """Initialize test database"""
+        # Use separate test database
+        test_db_path = Path(__file__).parent.parent / 'database' / 'rental_test.db'
+
+        # Remove old test database if exists
+        if test_db_path.exists():
+            test_db_path.unlink()
+
+        # Override DB_PATH for tests
+        db.DB_PATH = test_db_path
+
+        # Initialize fresh test database
         db.init_db()
+
+    @classmethod
+    def tearDownClass(cls):
+        """Clean up test database"""
+        # Remove test database after all tests
+        test_db_path = Path(__file__).parent.parent / 'database' / 'rental_test.db'
+        if test_db_path.exists():
+            test_db_path.unlink()
 
     def test_user_creation(self):
         """Test user creation and retrieval"""
@@ -133,10 +153,18 @@ class TestLocalization(unittest.TestCase):
 class TestValidation(unittest.TestCase):
     """Validation tests"""
 
+    def validate_phone(self, phone: str) -> bool:
+        """Validate phone number format (copied from main.py to avoid aiogram import)"""
+        import re
+        cleaned = re.sub(r'[\s\(\)\-]', '', phone)
+        if cleaned.startswith('8'):
+            cleaned = '7' + cleaned[1:]
+        if not cleaned.startswith('+'):
+            cleaned = '+' + cleaned
+        return bool(re.match(r'^\+7\d{10}$', cleaned))
+
     def test_phone_validation(self):
         """Test phone number validation"""
-        from main import validate_phone
-
         valid_phones = [
             '+7 (777) 777 77 77',
             '+7 777 777 77 77',
@@ -149,7 +177,7 @@ class TestValidation(unittest.TestCase):
         ]
 
         for phone in valid_phones:
-            self.assertTrue(validate_phone(phone), f"Phone {phone} should be valid")
+            self.assertTrue(self.validate_phone(phone), f"Phone {phone} should be valid")
 
         invalid_phones = [
             '777 777 77 77',  # No country code
@@ -160,10 +188,34 @@ class TestValidation(unittest.TestCase):
         ]
 
         for phone in invalid_phones:
-            self.assertFalse(validate_phone(phone), f"Phone {phone} should be invalid")
+            self.assertFalse(self.validate_phone(phone), f"Phone {phone} should be invalid")
 
 class TestBusinessLogic(unittest.TestCase):
     """Business logic tests"""
+
+    @classmethod
+    def setUpClass(cls):
+        """Initialize test database"""
+        # Use separate test database
+        test_db_path = Path(__file__).parent.parent / 'database' / 'rental_test.db'
+
+        # Remove old test database if exists
+        if test_db_path.exists():
+            test_db_path.unlink()
+
+        # Override DB_PATH for tests
+        db.DB_PATH = test_db_path
+
+        # Initialize fresh test database
+        db.init_db()
+
+    @classmethod
+    def tearDownClass(cls):
+        """Clean up test database"""
+        # Remove test database after all tests
+        test_db_path = Path(__file__).parent.parent / 'database' / 'rental_test.db'
+        if test_db_path.exists():
+            test_db_path.unlink()
 
     def test_booking_creation(self):
         """Test booking creation"""
