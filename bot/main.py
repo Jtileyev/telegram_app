@@ -3,7 +3,7 @@ import logging
 import re
 from datetime import datetime, timedelta
 from aiogram import Bot, Dispatcher, F, Router
-from aiogram.types import Message, CallbackQuery, FSInputFile
+from aiogram.types import Message, CallbackQuery, FSInputFile, InputMediaPhoto
 from aiogram.filters import Command, CommandStart
 from aiogram.fsm.context import FSMContext
 from aiogram.fsm.state import State, StatesGroup
@@ -295,7 +295,7 @@ async def handle_favorites(message: Message, state: FSMContext):
     # Show first apartment
     await show_favorite_apartment(message, state, 0)
 
-async def show_favorite_apartment(message: Message, state: FSMContext, index: int, photo_index: int = 0):
+async def show_favorite_apartment(message: Message, state: FSMContext, index: int):
     """Show favorite apartment by index"""
     data = await state.get_data()
     favorites = data.get('favorites', [])
@@ -313,36 +313,43 @@ async def show_favorite_apartment(message: Message, state: FSMContext, index: in
     has_prev = index > 0
     has_next = index < len(favorites) - 1
 
-    # Photo navigation
-    photos = apartment.get('photos', [])
-    photo_count = len(photos)
-    photo_index = max(0, min(photo_index, photo_count - 1)) if photos else 0
-    has_prev_photo = photo_index > 0
-    has_next_photo = photo_index < photo_count - 1
-
     keyboard = get_apartment_card_keyboard(
         apartment['id'],
         is_favorite=True,
         lang=lang,
         has_prev=has_prev,
-        has_next=has_next,
-        photo_index=photo_index,
-        photo_count=photo_count,
-        has_prev_photo=has_prev_photo,
-        has_next_photo=has_next_photo
+        has_next=has_next
     )
 
+    photos = apartment.get('photos', [])
+
     if photos:
-        photo_path = photos[photo_index]
         try:
-            photo = FSInputFile(photo_path)
-            await message.answer_photo(photo, caption=text, parse_mode="Markdown", reply_markup=keyboard)
-        except Exception:
+            if len(photos) == 1:
+                # Single photo
+                photo = FSInputFile(photos[0])
+                await message.answer_photo(photo, caption=text, parse_mode="Markdown", reply_markup=keyboard)
+            else:
+                # Multiple photos - send as media group (up to 10 photos)
+                media_group = []
+                for i, photo_path in enumerate(photos[:10]):  # Telegram limit: 10 photos max
+                    photo = FSInputFile(photo_path)
+                    if i == 0:
+                        # First photo gets the caption
+                        media_group.append(InputMediaPhoto(media=photo, caption=text, parse_mode="Markdown"))
+                    else:
+                        media_group.append(InputMediaPhoto(media=photo))
+
+                await message.answer_media_group(media=media_group)
+                # Send keyboard separately as media groups can't have inline keyboards
+                await message.answer("👇 Действия:", reply_markup=keyboard)
+        except Exception as e:
+            logger.error(f"Error sending photos: {e}")
             await message.answer(text, parse_mode="Markdown", reply_markup=keyboard)
     else:
         await message.answer(text, parse_mode="Markdown", reply_markup=keyboard)
 
-    await state.update_data(fav_index=index, fav_photo_index=photo_index)
+    await state.update_data(fav_index=index)
 
 @router.message(F.text.in_([
     get_text('btn_language', 'ru'), get_text('btn_language', 'kk')
@@ -603,7 +610,7 @@ async def show_apartments(callback: CallbackQuery, state: FSMContext):
     await show_apartment(callback.message, state, 0, user)
     await callback.answer()
 
-async def show_apartment(message: Message, state: FSMContext, index: int, user: dict, photo_index: int = 0):
+async def show_apartment(message: Message, state: FSMContext, index: int, user: dict):
     """Show apartment card by index"""
     data = await state.get_data()
     apartments = data.get('apartments', [])
@@ -620,36 +627,43 @@ async def show_apartment(message: Message, state: FSMContext, index: int, user: 
     has_next = index < len(apartments) - 1
     is_fav = db.is_favorite(user['id'], apartment['id'])
 
-    # Photo navigation
-    photos = apartment.get('photos', [])
-    photo_count = len(photos)
-    photo_index = max(0, min(photo_index, photo_count - 1)) if photos else 0
-    has_prev_photo = photo_index > 0
-    has_next_photo = photo_index < photo_count - 1
-
     keyboard = get_apartment_card_keyboard(
         apartment['id'],
         is_favorite=is_fav,
         lang=lang,
         has_prev=has_prev,
-        has_next=has_next,
-        photo_index=photo_index,
-        photo_count=photo_count,
-        has_prev_photo=has_prev_photo,
-        has_next_photo=has_next_photo
+        has_next=has_next
     )
 
+    photos = apartment.get('photos', [])
+
     if photos:
-        photo_path = photos[photo_index]
         try:
-            photo = FSInputFile(photo_path)
-            await message.answer_photo(photo, caption=text, parse_mode="Markdown", reply_markup=keyboard)
-        except Exception:
+            if len(photos) == 1:
+                # Single photo
+                photo = FSInputFile(photos[0])
+                await message.answer_photo(photo, caption=text, parse_mode="Markdown", reply_markup=keyboard)
+            else:
+                # Multiple photos - send as media group (up to 10 photos)
+                media_group = []
+                for i, photo_path in enumerate(photos[:10]):  # Telegram limit: 10 photos max
+                    photo = FSInputFile(photo_path)
+                    if i == 0:
+                        # First photo gets the caption
+                        media_group.append(InputMediaPhoto(media=photo, caption=text, parse_mode="Markdown"))
+                    else:
+                        media_group.append(InputMediaPhoto(media=photo))
+
+                await message.answer_media_group(media=media_group)
+                # Send keyboard separately as media groups can't have inline keyboards
+                await message.answer("👇 Действия:", reply_markup=keyboard)
+        except Exception as e:
+            logger.error(f"Error sending photos: {e}")
             await message.answer(text, parse_mode="Markdown", reply_markup=keyboard)
     else:
         await message.answer(text, parse_mode="Markdown", reply_markup=keyboard)
 
-    await state.update_data(apt_index=index, apt_photo_index=photo_index)
+    await state.update_data(apt_index=index)
 
 @router.callback_query(F.data.startswith("apt_"))
 async def navigate_apartments(callback: CallbackQuery, state: FSMContext):
@@ -670,114 +684,6 @@ async def navigate_apartments(callback: CallbackQuery, state: FSMContext):
     await show_apartment(callback.message, state, new_index, user)
     await callback.answer()
 
-@router.callback_query(F.data.startswith("photo_"))
-async def navigate_photos(callback: CallbackQuery, state: FSMContext):
-    """Navigate through apartment photos"""
-    parts = callback.data.split("_")
-    direction = parts[1]  # prev or next
-    apartment_id = int(parts[2])
-
-    data = await state.get_data()
-    telegram_id = callback.from_user.id
-    user = db.get_user(telegram_id)
-    lang = user['language']
-
-    # Check if we're in apartments or favorites view
-    apartments = data.get('apartments', [])
-    favorites = data.get('favorites', [])
-
-    if apartments:
-        # We're viewing search results
-        apt_index = data.get('apt_index', 0)
-        current_photo_index = data.get('apt_photo_index', 0)
-        apartment = apartments[apt_index]
-
-        if direction == "prev":
-            new_photo_index = current_photo_index - 1
-        else:
-            new_photo_index = current_photo_index + 1
-
-        # Update only the photo
-        photos = apartment.get('photos', [])
-        if photos and 0 <= new_photo_index < len(photos):
-            try:
-                photo = FSInputFile(photos[new_photo_index])
-
-                # Recreate keyboard with updated photo index
-                has_prev = apt_index > 0
-                has_next = apt_index < len(apartments) - 1
-                is_fav = db.is_favorite(user['id'], apartment['id'])
-
-                photo_count = len(photos)
-                has_prev_photo = new_photo_index > 0
-                has_next_photo = new_photo_index < photo_count - 1
-
-                keyboard = get_apartment_card_keyboard(
-                    apartment['id'],
-                    is_favorite=is_fav,
-                    lang=lang,
-                    has_prev=has_prev,
-                    has_next=has_next,
-                    photo_index=new_photo_index,
-                    photo_count=photo_count,
-                    has_prev_photo=has_prev_photo,
-                    has_next_photo=has_next_photo
-                )
-
-                text = format_apartment_card(apartment, lang)
-
-                await callback.message.delete()
-                await callback.message.answer_photo(photo, caption=text, parse_mode="Markdown", reply_markup=keyboard)
-                await state.update_data(apt_photo_index=new_photo_index)
-            except Exception as e:
-                await callback.answer("Ошибка загрузки фото")
-    elif favorites:
-        # We're viewing favorites
-        fav_index = data.get('fav_index', 0)
-        current_photo_index = data.get('fav_photo_index', 0)
-        apartment = favorites[fav_index]
-
-        if direction == "prev":
-            new_photo_index = current_photo_index - 1
-        else:
-            new_photo_index = current_photo_index + 1
-
-        # Update only the photo
-        photos = apartment.get('photos', [])
-        if photos and 0 <= new_photo_index < len(photos):
-            try:
-                photo = FSInputFile(photos[new_photo_index])
-
-                # Recreate keyboard with updated photo index
-                has_prev = fav_index > 0
-                has_next = fav_index < len(favorites) - 1
-
-                photo_count = len(photos)
-                has_prev_photo = new_photo_index > 0
-                has_next_photo = new_photo_index < photo_count - 1
-
-                keyboard = get_apartment_card_keyboard(
-                    apartment['id'],
-                    is_favorite=True,
-                    lang=lang,
-                    has_prev=has_prev,
-                    has_next=has_next,
-                    photo_index=new_photo_index,
-                    photo_count=photo_count,
-                    has_prev_photo=has_prev_photo,
-                    has_next_photo=has_next_photo
-                )
-
-                text = format_apartment_card(apartment, lang)
-
-                await callback.message.delete()
-                await callback.message.answer_photo(photo, caption=text, parse_mode="Markdown", reply_markup=keyboard)
-                await state.update_data(fav_photo_index=new_photo_index)
-            except Exception as e:
-                await callback.answer("Ошибка загрузки фото")
-
-    await callback.answer()
-
 @router.callback_query(F.data.startswith("fav_"))
 async def add_to_favorites(callback: CallbackQuery, state: FSMContext):
     """Add apartment to favorites"""
@@ -793,23 +699,14 @@ async def add_to_favorites(callback: CallbackQuery, state: FSMContext):
     data = await state.get_data()
     apartments = data.get('apartments', [])
     apt_index = data.get('apt_index', 0)
-    photo_index = data.get('apt_photo_index', 0)
 
     if apartments:
-        apartment = apartments[apt_index]
         has_prev = apt_index > 0
         has_next = apt_index < len(apartments) - 1
 
-        photos = apartment.get('photos', [])
-        photo_count = len(photos)
-        has_prev_photo = photo_index > 0
-        has_next_photo = photo_index < photo_count - 1
-
         keyboard = get_apartment_card_keyboard(
             apartment_id, is_favorite=True, lang=lang,
-            has_prev=has_prev, has_next=has_next,
-            photo_index=photo_index, photo_count=photo_count,
-            has_prev_photo=has_prev_photo, has_next_photo=has_next_photo
+            has_prev=has_prev, has_next=has_next
         )
         await callback.message.edit_reply_markup(reply_markup=keyboard)
 
@@ -828,23 +725,14 @@ async def remove_from_favorites(callback: CallbackQuery, state: FSMContext):
     data = await state.get_data()
     apartments = data.get('apartments', [])
     apt_index = data.get('apt_index', 0)
-    photo_index = data.get('apt_photo_index', 0)
 
     if apartments:
-        apartment = apartments[apt_index]
         has_prev = apt_index > 0
         has_next = apt_index < len(apartments) - 1
 
-        photos = apartment.get('photos', [])
-        photo_count = len(photos)
-        has_prev_photo = photo_index > 0
-        has_next_photo = photo_index < photo_count - 1
-
         keyboard = get_apartment_card_keyboard(
             apartment_id, is_favorite=False, lang=lang,
-            has_prev=has_prev, has_next=has_next,
-            photo_index=photo_index, photo_count=photo_count,
-            has_prev_photo=has_prev_photo, has_next_photo=has_next_photo
+            has_prev=has_prev, has_next=has_next
         )
         await callback.message.edit_reply_markup(reply_markup=keyboard)
 
