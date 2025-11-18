@@ -24,7 +24,7 @@ sleep 1
 
 # Запуск Python бота
 echo -e "${GREEN}Запуск Telegram бота...${NC}"
-python3 bot/main.py > bot.log 2>&1 &
+venv/bin/python3 bot/main.py > bot.log 2>&1 &
 BOT_PID=$!
 echo "Бот запущен (PID: $BOT_PID)"
 
