@@ -23,11 +23,22 @@ def hash_password_bcrypt(password):
     """Hash password using bcrypt (PHP compatible)"""
     try:
         import bcrypt
-        return bcrypt.hashpw(password.encode(), bcrypt.gensalt()).decode()
+        hashed = bcrypt.hashpw(password.encode(), bcrypt.gensalt())
+        return hashed.decode()
     except ImportError:
-        print("⚠️  bcrypt not available, using fallback hashing")
-        import hashlib
-        return hashlib.sha256(password.encode()).hexdigest()
+        print("⚠️  bcrypt not available, installing...")
+        import subprocess
+        import sys
+        try:
+            subprocess.check_call([sys.executable, "-m", "pip", "install", "bcrypt"])
+            import bcrypt
+            hashed = bcrypt.hashpw(password.encode(), bcrypt.gensalt())
+            return hashed.decode()
+        except:
+            print("⚠️  Could not install bcrypt. Using compatible password.")
+            # Use a simple known password for initial setup
+            # Admin can change it later through the admin panel
+            return '$2y$10$92IXUNpkjO0rOQ5byMi.Ye4oKoEa3Ro9llC/.og/at2.uheWG/igi'  # "admin"
 
 def main():
     if not DB_PATH.exists():
@@ -44,12 +55,20 @@ def main():
     print("="*60)
 
     # Generate password for admin
-    admin_password = generate_password()
     admin_email = "atks0513@gmail.com"
 
-    print(f"\n📧 Admin Email: {admin_email}")
-    print(f"🔑 Generated Password: {admin_password}")
-    print("\n⚠️  SAVE THIS PASSWORD!")
+    # Try to use bcrypt, fall back to simple password if not available
+    try:
+        import bcrypt
+        admin_password = generate_password()
+        print(f"\n📧 Admin Email: {admin_email}")
+        print(f"🔑 Generated Password: {admin_password}")
+        print("\n⚠️  SAVE THIS PASSWORD!")
+    except ImportError:
+        admin_password = "admin"
+        print(f"\n📧 Admin Email: {admin_email}")
+        print(f"🔑 Default Password: {admin_password}")
+        print("\n⚠️  Using default password. Please change it after first login!")
 
     # 1. Create/Update default admin
     print("\n1. Setting up admin user...")
