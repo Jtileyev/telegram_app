@@ -6,6 +6,27 @@ $pageTitle = 'Пользователи';
 
 $db = getDB();
 
+// Handle user deletion
+if (isset($_GET['delete']) && is_numeric($_GET['delete'])) {
+    $userId = $_GET['delete'];
+
+    // Check if user exists
+    $stmt = $db->prepare("SELECT id FROM users WHERE id = ?");
+    $stmt->execute([$userId]);
+
+    if ($stmt->fetch()) {
+        // Delete user (cascading will handle related records)
+        $stmt = $db->prepare("DELETE FROM users WHERE id = ?");
+        $stmt->execute([$userId]);
+        setFlash('success', 'Пользователь успешно удален');
+    } else {
+        setFlash('danger', 'Пользователь не найден');
+    }
+
+    header('Location: users.php');
+    exit;
+}
+
 $stmt = $db->query("
     SELECT u.*,
            (SELECT COUNT(*) FROM bookings WHERE user_id = u.id) as bookings_count,
@@ -35,6 +56,7 @@ include 'header.php';
                         <th>Бронирований</th>
                         <th>В избранном</th>
                         <th>Зарегистрирован</th>
+                        <th>Действия</th>
                     </tr>
                 </thead>
                 <tbody>
@@ -60,6 +82,14 @@ include 'header.php';
                         </td>
                         <td>
                             <?= date('d.m.Y H:i', strtotime($user['created_at'])) ?>
+                        </td>
+                        <td>
+                            <a href="?delete=<?= $user['id'] ?>"
+                               class="btn btn-sm btn-outline-danger"
+                               onclick="return confirm('Вы уверены, что хотите удалить пользователя <?= sanitize($user['full_name'] ?: 'ID: ' . $user['id']) ?>?\n\nБудут также удалены:\n- Все бронирования (<?= $user['bookings_count'] ?>)\n- Избранное (<?= $user['favorites_count'] ?>)\n\nЭто действие необратимо!')"
+                               title="Удалить">
+                                <i class="bi bi-trash"></i>
+                            </a>
                         </td>
                     </tr>
                     <?php endforeach; ?>

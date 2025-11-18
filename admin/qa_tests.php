@@ -260,13 +260,13 @@ include 'header.php';
                             </tr>
                             <tr>
                                 <td><strong>Bot Handlers</strong></td>
-                                <td>Обработчики команд бота</td>
-                                <td><span class="badge bg-warning">Частично</span></td>
+                                <td>Обработчики команд бота, регистрация, поиск, бронирования</td>
+                                <td><span class="badge bg-success">Покрыто</span></td>
                             </tr>
                             <tr>
                                 <td><strong>Admin Panel</strong></td>
-                                <td>Административная панель</td>
-                                <td><span class="badge bg-warning">Частично</span></td>
+                                <td>Административная панель, авторизация, управление данными</td>
+                                <td><span class="badge bg-success">Покрыто</span></td>
                             </tr>
                         </tbody>
                     </table>
