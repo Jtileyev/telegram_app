@@ -27,45 +27,35 @@ if ($_SERVER['REQUEST_METHOD'] === 'POST') {
         if (empty($email) || !filter_var($email, FILTER_VALIDATE_EMAIL)) {
             $error = 'Введите корректный email';
         } else {
-            // Check in admins table
-            $stmt = $db->prepare("SELECT * FROM admins WHERE username = ? AND is_active = 1");
+            // Check in users table
+            $stmt = $db->prepare("SELECT * FROM users WHERE email = ? AND is_active = 1");
             $stmt->execute([$email]);
-            $admin = $stmt->fetch();
+            $foundUser = $stmt->fetch();
 
-            if ($admin) {
-                $user = [
-                    'id' => $admin['id'],
-                    'email' => $admin['username'],
-                    'full_name' => $admin['full_name'],
-                    'password' => $admin['password'],
-                    'role' => 'admin'
-                ];
-                $step = 'password';
-            } else {
-                // Check in landlords table
-                $stmt = $db->prepare("SELECT * FROM landlords WHERE email = ? AND is_active = 1");
-                $stmt->execute([$email]);
-                $landlord = $stmt->fetch();
+            if ($foundUser) {
+                $roles = json_decode($foundUser['roles'], true) ?: [];
 
-                if ($landlord) {
+                // Check if user has admin or landlord role
+                if (in_array('admin', $roles) || in_array('landlord', $roles)) {
                     $user = [
-                        'id' => $landlord['id'],
-                        'email' => $landlord['email'],
-                        'full_name' => $landlord['full_name'],
-                        'password' => $landlord['password'],
-                        'role' => 'landlord',
-                        'landlord_id' => $landlord['id']
+                        'id' => $foundUser['id'],
+                        'email' => $foundUser['email'],
+                        'full_name' => $foundUser['full_name'],
+                        'password' => $foundUser['password'],
+                        'roles' => $roles
                     ];
 
                     // Check if password is set
-                    if (empty($landlord['password'])) {
+                    if (empty($foundUser['password'])) {
                         $step = 'set_password';
                     } else {
                         $step = 'password';
                     }
                 } else {
-                    $error = 'Пользователь с таким email не найден';
+                    $error = 'У вас нет доступа к админ-панели';
                 }
+            } else {
+                $error = 'Пользователь с таким email не найден';
             }
 
             // Store user data in session temporarily
@@ -84,19 +74,13 @@ if ($_SERVER['REQUEST_METHOD'] === 'POST') {
             if (password_verify($password, $user['password'])) {
                 // Login successful
                 $_SESSION['user_id'] = $user['id'];
-                $_SESSION['user_role'] = $user['role'];
+                $_SESSION['user_roles'] = $user['roles'];
                 $_SESSION['user_email'] = $user['email'];
                 $_SESSION['user_name'] = $user['full_name'];
 
-                if ($user['role'] === 'landlord') {
-                    $_SESSION['landlord_id'] = $user['landlord_id'];
-                }
-
                 // Update last login
-                if ($user['role'] === 'admin') {
-                    $stmt = $db->prepare("UPDATE admins SET last_login = CURRENT_TIMESTAMP WHERE id = ?");
-                    $stmt->execute([$user['id']]);
-                }
+                $stmt = $db->prepare("UPDATE users SET last_login = CURRENT_TIMESTAMP WHERE id = ?");
+                $stmt->execute([$user['id']]);
 
                 unset($_SESSION['temp_user']);
                 header('Location: index.php');
@@ -131,20 +115,14 @@ if ($_SERVER['REQUEST_METHOD'] === 'POST') {
                 // Set password
                 $hashed_password = password_hash($password, PASSWORD_DEFAULT);
 
-                if ($user['role'] === 'landlord') {
-                    $stmt = $db->prepare("UPDATE landlords SET password = ?, updated_at = CURRENT_TIMESTAMP WHERE id = ?");
-                    $stmt->execute([$hashed_password, $user['id']]);
-                }
+                $stmt = $db->prepare("UPDATE users SET password = ?, updated_at = CURRENT_TIMESTAMP WHERE id = ?");
+                $stmt->execute([$hashed_password, $user['id']]);
 
                 // Auto-login
                 $_SESSION['user_id'] = $user['id'];
-                $_SESSION['user_role'] = $user['role'];
+                $_SESSION['user_roles'] = $user['roles'];
                 $_SESSION['user_email'] = $user['email'];
                 $_SESSION['user_name'] = $user['full_name'];
-
-                if ($user['role'] === 'landlord') {
-                    $_SESSION['landlord_id'] = $user['landlord_id'];
-                }
 
                 unset($_SESSION['temp_user']);
                 header('Location: index.php');

@@ -27,20 +27,20 @@ if (isset($_GET['activate']) && is_numeric($_GET['activate'])) {
 
 // Get apartments
 $query = "
-    SELECT a.*, l.full_name as landlord_name, l.phone as landlord_phone,
+    SELECT a.*, u.full_name as landlord_name, u.phone as landlord_phone,
            c.name_ru as city_name, d.name_ru as district_name
     FROM apartments a
-    JOIN landlords l ON a.landlord_id = l.id
+    JOIN users u ON a.landlord_id = u.id
     JOIN cities c ON a.city_id = c.id
     JOIN districts d ON a.district_id = d.id
     WHERE 1=1
 ";
 
 // Filter by landlord if not admin
-if (isLandlord()) {
+if (isLandlord() && !isAdmin()) {
     $query .= " AND a.landlord_id = ?";
     $stmt = $db->prepare($query . " ORDER BY a.created_at DESC");
-    $stmt->execute([getLandlordId()]);
+    $stmt->execute([getUserId()]);
 } else {
     $stmt = $db->query($query . " ORDER BY a.created_at DESC");
 }

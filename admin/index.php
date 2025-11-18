@@ -29,8 +29,8 @@ $stats['pending'] = $stmt->fetch()['count'];
 $stmt = $db->query("SELECT COALESCE(SUM(platform_fee), 0) as total FROM bookings WHERE status = 'completed'");
 $stats['revenue'] = $stmt->fetch()['total'];
 
-// Total landlords
-$stmt = $db->query("SELECT COUNT(*) as count FROM landlords WHERE is_active = 1");
+// Total landlords (users with landlord role)
+$stmt = $db->query("SELECT COUNT(*) as count FROM users WHERE is_active = 1 AND roles LIKE '%landlord%'");
 $stats['landlords'] = $stmt->fetch()['count'];
 
 // Pending requests

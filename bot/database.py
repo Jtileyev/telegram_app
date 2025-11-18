@@ -38,8 +38,8 @@ def create_user(telegram_id: int, username: str = None, lang: str = 'ru'):
     """Create new user"""
     conn = get_connection()
     conn.execute(
-        "INSERT INTO users (telegram_id, username, language) VALUES (?, ?, ?)",
-        (telegram_id, username, lang)
+        "INSERT INTO users (telegram_id, username, language, roles) VALUES (?, ?, ?, ?)",
+        (telegram_id, username, lang, json.dumps(['user']))
     )
     conn.commit()
     user_id = conn.execute("SELECT last_insert_rowid()").fetchone()[0]
@@ -62,6 +62,71 @@ def get_user_language(telegram_id: int) -> str:
     """Get user's preferred language"""
     user = get_user(telegram_id)
     return user['language'] if user else 'ru'
+
+# User roles management
+def has_role(user_id: int, role: str) -> bool:
+    """Check if user has a specific role"""
+    conn = get_connection()
+    cursor = conn.execute("SELECT roles FROM users WHERE id = ?", (user_id,))
+    row = cursor.fetchone()
+    conn.close()
+
+    if not row:
+        return False
+
+    roles = json.loads(row['roles']) if row['roles'] else []
+    return role in roles
+
+def get_user_roles(user_id: int) -> list:
+    """Get user's roles"""
+    conn = get_connection()
+    cursor = conn.execute("SELECT roles FROM users WHERE id = ?", (user_id,))
+    row = cursor.fetchone()
+    conn.close()
+
+    if not row:
+        return []
+
+    return json.loads(row['roles']) if row['roles'] else []
+
+def add_role(user_id: int, role: str):
+    """Add role to user"""
+    roles = get_user_roles(user_id)
+    if role not in roles:
+        roles.append(role)
+        conn = get_connection()
+        conn.execute(
+            "UPDATE users SET roles = ?, updated_at = CURRENT_TIMESTAMP WHERE id = ?",
+            (json.dumps(roles), user_id)
+        )
+        conn.commit()
+        conn.close()
+
+def remove_role(user_id: int, role: str):
+    """Remove role from user"""
+    roles = get_user_roles(user_id)
+    if role in roles:
+        roles.remove(role)
+        conn = get_connection()
+        conn.execute(
+            "UPDATE users SET roles = ?, updated_at = CURRENT_TIMESTAMP WHERE id = ?",
+            (json.dumps(roles), user_id)
+        )
+        conn.commit()
+        conn.close()
+
+def get_users_by_role(role: str):
+    """Get all users with specific role"""
+    conn = get_connection()
+    cursor = conn.execute("SELECT * FROM users WHERE is_active = 1")
+    users = []
+    for row in cursor.fetchall():
+        user = dict(row)
+        roles = json.loads(user['roles']) if user['roles'] else []
+        if role in roles:
+            users.append(user)
+    conn.close()
+    return users
 
 # User state management
 def get_user_state(user_id: int):
@@ -144,14 +209,14 @@ def get_apartments(city_id: int = None, district_id: int = None):
     conn = get_connection()
 
     query = """
-        SELECT a.*, l.phone as landlord_phone, l.full_name as landlord_name,
+        SELECT a.*, u.phone as landlord_phone, u.full_name as landlord_name,
                c.name_ru as city_name_ru, c.name_kk as city_name_kk,
                d.name_ru as district_name_ru, d.name_kk as district_name_kk
         FROM apartments a
-        JOIN landlords l ON a.landlord_id = l.id
+        JOIN users u ON a.landlord_id = u.id
         JOIN cities c ON a.city_id = c.id
         JOIN districts d ON a.district_id = d.id
-        WHERE a.is_active = 1 AND l.is_active = 1
+        WHERE a.is_active = 1 AND u.is_active = 1
     """
     params = []
 
@@ -180,12 +245,12 @@ def get_apartment_by_id(apartment_id: int):
     """Get apartment by ID"""
     conn = get_connection()
     cursor = conn.execute("""
-        SELECT a.*, l.phone as landlord_phone, l.full_name as landlord_name,
-               l.telegram_id as landlord_telegram_id,
+        SELECT a.*, u.phone as landlord_phone, u.full_name as landlord_name,
+               u.telegram_id as landlord_telegram_id,
                c.name_ru as city_name_ru, c.name_kk as city_name_kk,
                d.name_ru as district_name_ru, d.name_kk as district_name_kk
         FROM apartments a
-        JOIN landlords l ON a.landlord_id = l.id
+        JOIN users u ON a.landlord_id = u.id
         JOIN cities c ON a.city_id = c.id
         JOIN districts d ON a.district_id = d.id
         WHERE a.id = ?
@@ -230,10 +295,10 @@ def get_user_bookings(user_id: int):
     conn = get_connection()
     cursor = conn.execute("""
         SELECT b.*, a.title_ru, a.title_kk, a.address, a.price_per_day,
-               l.phone as landlord_phone, l.full_name as landlord_name
+               u.phone as landlord_phone, u.full_name as landlord_name
         FROM bookings b
         JOIN apartments a ON b.apartment_id = a.id
-        JOIN landlords l ON b.landlord_id = l.id
+        JOIN users u ON b.landlord_id = u.id
         WHERE b.user_id = ?
         ORDER BY b.created_at DESC
     """, (user_id,))
@@ -246,13 +311,13 @@ def get_booking_by_id(booking_id: int):
     conn = get_connection()
     cursor = conn.execute("""
         SELECT b.*, a.title_ru, a.title_kk, a.address, a.price_per_day,
-               l.phone as landlord_phone, l.full_name as landlord_name,
-               l.telegram_id as landlord_telegram_id,
-               u.telegram_id as user_telegram_id, u.full_name as user_name, u.phone as user_phone
+               landlord.phone as landlord_phone, landlord.full_name as landlord_name,
+               landlord.telegram_id as landlord_telegram_id,
+               renter.telegram_id as user_telegram_id, renter.full_name as user_name, renter.phone as user_phone
         FROM bookings b
         JOIN apartments a ON b.apartment_id = a.id
-        JOIN landlords l ON b.landlord_id = l.id
-        JOIN users u ON b.user_id = u.id
+        JOIN users landlord ON b.landlord_id = landlord.id
+        JOIN users renter ON b.user_id = renter.id
         WHERE b.id = ?
     """, (booking_id,))
     booking = cursor.fetchone()
@@ -340,12 +405,12 @@ def get_user_favorites(user_id: int):
     """Get user's favorite apartments"""
     conn = get_connection()
     cursor = conn.execute("""
-        SELECT a.*, l.phone as landlord_phone, l.full_name as landlord_name,
+        SELECT a.*, u.phone as landlord_phone, u.full_name as landlord_name,
                c.name_ru as city_name_ru, c.name_kk as city_name_kk,
                d.name_ru as district_name_ru, d.name_kk as district_name_kk
         FROM favorites f
         JOIN apartments a ON f.apartment_id = a.id
-        JOIN landlords l ON a.landlord_id = l.id
+        JOIN users u ON a.landlord_id = u.id
         JOIN cities c ON a.city_id = c.id
         JOIN districts d ON a.district_id = d.id
         WHERE f.user_id = ?
@@ -438,23 +503,31 @@ def create_landlord_request(telegram_id: int, full_name: str, phone: str, email:
     conn.close()
 
 def get_landlord_by_telegram_id(telegram_id: int):
-    """Get landlord by telegram ID"""
+    """Get landlord by telegram ID (user with landlord role)"""
     conn = get_connection()
     cursor = conn.execute(
-        "SELECT * FROM landlords WHERE telegram_id = ?",
+        "SELECT * FROM users WHERE telegram_id = ?",
         (telegram_id,)
     )
-    landlord = cursor.fetchone()
+    user = cursor.fetchone()
     conn.close()
-    return dict(landlord) if landlord else None
+
+    if not user:
+        return None
+
+    user = dict(user)
+    roles = json.loads(user['roles']) if user['roles'] else []
+
+    # Return user if they have landlord role
+    return user if 'landlord' in roles else None
 
 # Messages operations
-def create_message(booking_id: int, sender_type: str, sender_id: int, message: str):
+def create_message(booking_id: int, sender_id: int, message: str):
     """Create new message"""
     conn = get_connection()
     conn.execute(
-        "INSERT INTO messages (booking_id, sender_type, sender_id, message) VALUES (?, ?, ?, ?)",
-        (booking_id, sender_type, sender_id, message)
+        "INSERT INTO messages (booking_id, sender_id, message) VALUES (?, ?, ?)",
+        (booking_id, sender_id, message)
     )
     conn.commit()
     conn.close()
