@@ -22,12 +22,16 @@ $statusFilter = $_GET['status'] ?? 'all';
 
 $query = "
     SELECT b.*, renter.full_name as user_name, renter.phone as user_phone, renter.telegram_id as user_telegram,
-           a.title_ru as apartment_title, a.address,
-           landlord.full_name as landlord_name, landlord.phone as landlord_phone
+           a.title_ru as apartment_title, a.address, a.promotion_id as apartment_promotion_id,
+           landlord.full_name as landlord_name, landlord.phone as landlord_phone,
+           p.name as promotion_name, p.bookings_required, p.free_days as promotion_free_days,
+           upp.completed_bookings, upp.cycle_number
     FROM bookings b
     JOIN users renter ON b.user_id = renter.id
     JOIN apartments a ON b.apartment_id = a.id
     JOIN users landlord ON b.landlord_id = landlord.id
+    LEFT JOIN promotions p ON b.promotion_id = p.id
+    LEFT JOIN user_promotion_progress upp ON upp.user_id = b.user_id AND upp.apartment_id = b.apartment_id
     WHERE 1=1
 ";
 
@@ -85,6 +89,7 @@ include 'header.php';
                         <th>Даты</th>
                         <th>Сумма</th>
                         <th>Комиссия</th>
+                        <th>Акция</th>
                         <th>Статус</th>
                         <th>Создано</th>
                         <th>Действия</th>
@@ -111,8 +116,28 @@ include 'header.php';
                             <?= formatDate($booking['check_in_date']) ?><br>
                             <?= formatDate($booking['check_out_date']) ?>
                         </td>
-                        <td><?= formatPrice($booking['total_price']) ?></td>
+                        <td>
+                            <?php if ($booking['promotion_discount_days'] > 0): ?>
+                            <span class="text-success"><?= formatPrice($booking['total_price']) ?></span>
+                            <br><small class="text-muted">Было: <?= formatPrice($booking['original_price']) ?></small>
+                            <?php else: ?>
+                            <?= formatPrice($booking['total_price']) ?>
+                            <?php endif; ?>
+                        </td>
                         <td><?= formatPrice($booking['platform_fee']) ?></td>
+                        <td>
+                            <?php if ($booking['promotion_discount_days'] > 0): ?>
+                            <span class="badge bg-success" title="<?= sanitize($booking['promotion_name']) ?>">
+                                <i class="bi bi-gift"></i> -<?= $booking['promotion_discount_days'] ?> дн.
+                            </span>
+                            <?php elseif ($booking['apartment_promotion_id']): ?>
+                            <small class="text-muted" title="Прогресс по акции">
+                                <?= $booking['completed_bookings'] ?? 0 ?>/<?= $booking['bookings_required'] ?? 0 ?>
+                            </small>
+                            <?php else: ?>
+                            -
+                            <?php endif; ?>
+                        </td>
                         <td>
                             <?php
                             $statusClasses = [
