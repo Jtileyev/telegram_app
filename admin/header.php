@@ -81,6 +81,11 @@
                             </a>
                         </li>
                         <li class="nav-item">
+                            <a class="nav-link <?= in_array(basename($_SERVER['PHP_SELF']), ['amenities.php', 'amenity_edit.php']) ? 'active' : '' ?>" href="amenities.php">
+                                <i class="bi bi-grid-3x3-gap me-2"></i>Удобства
+                            </a>
+                        </li>
+                        <li class="nav-item">
                             <a class="nav-link <?= basename($_SERVER['PHP_SELF']) == 'requests.php' ? 'active' : '' ?>" href="requests.php">
                                 <i class="bi bi-envelope me-2"></i>Заявки
                             </a>
@@ -98,11 +103,6 @@
                         <li class="nav-item">
                             <a class="nav-link <?= basename($_SERVER['PHP_SELF']) == 'qa_tests.php' ? 'active' : '' ?>" href="qa_tests.php">
                                 <i class="bi bi-check2-square me-2"></i>QA Тесты
-                            </a>
-                        </li>
-                        <li class="nav-item">
-                            <a class="nav-link <?= basename($_SERVER['PHP_SELF']) == 'sqlite_browser.php' ? 'active' : '' ?>" href="sqlite_browser.php">
-                                <i class="bi bi-database me-2"></i>SQLite Browser
                             </a>
                         </li>
                         <li class="nav-item">
