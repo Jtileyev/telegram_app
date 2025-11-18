@@ -141,16 +141,22 @@ class TestValidation(unittest.TestCase):
             '+7 (777) 777 77 77',
             '+7 777 777 77 77',
             '+77777777777',
+            '7 777 777 77 77',
+            '77777777777',
+            '8 777 777 77 77',
+            '87777777777',
+            '8(777)7777777',
         ]
 
         for phone in valid_phones:
             self.assertTrue(validate_phone(phone), f"Phone {phone} should be valid")
 
         invalid_phones = [
-            '777 777 77 77',
-            '+7 77 77 77',
+            '777 777 77 77',  # No country code
+            '+7 77 77 77',    # Too short
             'invalid',
-            '+1 777 777 77 77',
+            '+1 777 777 77 77',  # Wrong country code
+            '9 777 777 77 77',   # Wrong first digit
         ]
 
         for phone in invalid_phones:

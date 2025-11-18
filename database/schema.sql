@@ -150,6 +150,7 @@ CREATE TABLE IF NOT EXISTS landlord_requests (
     telegram_id INTEGER NOT NULL,
     full_name TEXT NOT NULL,
     phone TEXT NOT NULL,
+    email TEXT NOT NULL,
     status TEXT DEFAULT 'pending', -- pending, approved, rejected
     created_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP,
     processed_at TIMESTAMP

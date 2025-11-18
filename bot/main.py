@@ -32,8 +32,6 @@ class RegistrationStates(StatesGroup):
 class SearchStates(StatesGroup):
     selecting_city = State()
     selecting_district = State()
-    selecting_check_in = State()
-    selecting_check_out = State()
     viewing_apartments = State()
 
 class BookingStates(StatesGroup):
@@ -43,6 +41,7 @@ class BookingStates(StatesGroup):
 class LandlordStates(StatesGroup):
     waiting_for_name = State()
     waiting_for_phone = State()
+    waiting_for_email = State()
 
 class ReviewStates(StatesGroup):
     selecting_rating = State()
@@ -52,8 +51,26 @@ class ReviewStates(StatesGroup):
 PHONE_REGEX = r'^\+7\s?\(?\d{3}\)?\s?\d{3}\s?\d{2}\s?\d{2}$'
 
 def validate_phone(phone: str) -> bool:
-    """Validate phone number format"""
+    """Validate phone number format
+
+    Supported formats:
+    - +7 (XXX) XXX XX XX
+    - +7 XXX XXX XX XX
+    - 7 XXX XXX XX XX
+    - 8 XXX XXX XX XX
+    """
+    # Remove spaces, parentheses, and hyphens
     cleaned = re.sub(r'[\s\(\)\-]', '', phone)
+
+    # Replace 8 with 7 at the beginning
+    if cleaned.startswith('8'):
+        cleaned = '7' + cleaned[1:]
+
+    # Add + if not present
+    if not cleaned.startswith('+'):
+        cleaned = '+' + cleaned
+
+    # Check if matches +7XXXXXXXXXX (11 digits total)
     return bool(re.match(r'^\+7\d{10}$', cleaned))
 
 def format_price(price: float) -> str:
@@ -400,8 +417,34 @@ async def process_landlord_phone(message: Message, state: FSMContext):
         await message.answer(get_text('invalid_phone', lang))
         return
 
+    await state.update_data(landlord_phone=phone)
+    await message.answer(get_text('enter_landlord_email', lang))
+    await state.set_state(LandlordStates.waiting_for_email)
+
+@router.message(LandlordStates.waiting_for_email)
+async def process_landlord_email(message: Message, state: FSMContext):
+    """Handle landlord email input"""
+    telegram_id = message.from_user.id
+    lang = db.get_user_language(telegram_id)
+
+    if message.text in [get_text('btn_back', lang), get_text('btn_main_menu', lang)]:
+        await state.clear()
+        await message.answer(
+            get_text('landlords_menu', lang),
+            reply_markup=get_landlord_menu_keyboard(lang)
+        )
+        return
+
+    email = message.text.strip()
+    # Validate email format
+    import re
+    email_pattern = r'^[a-zA-Z0-9._%+-]+@[a-zA-Z0-9.-]+\.[a-zA-Z]{2,}$'
+    if not re.match(email_pattern, email):
+        await message.answer(get_text('invalid_email', lang))
+        return
+
     data = await state.get_data()
-    db.create_landlord_request(telegram_id, data['landlord_name'], phone)
+    db.create_landlord_request(telegram_id, data['landlord_name'], data['landlord_phone'], email)
 
     await state.clear()
     await message.answer(
@@ -464,86 +507,11 @@ async def process_district_selection(callback: CallbackQuery, state: FSMContext)
     filters['district_id'] = district_id
     await state.update_data(filters=filters)
 
-    # Show calendar for check-in date
-    now = datetime.now()
-    await callback.message.edit_text(
-        get_text('select_check_in', lang),
-        reply_markup=get_calendar_keyboard(now.year, now.month, lang, now, calendar_type='check_in')
-    )
-    await state.set_state(SearchStates.selecting_check_in)
+    # Show filters summary and available apartments
+    await show_filters_summary(callback.message, filters, lang)
+    await state.set_state(SearchStates.viewing_apartments)
     await callback.answer()
 
-@router.callback_query(F.data.startswith("cal_"))
-async def process_calendar_navigation(callback: CallbackQuery, state: FSMContext):
-    """Handle calendar month navigation"""
-    parts = callback.data.split("_")
-    direction = parts[1]  # prev or next
-    year = int(parts[2])
-    month = int(parts[3])
-    calendar_type = parts[4]
-
-    if direction == "prev":
-        month -= 1
-        if month < 1:
-            month = 12
-            year -= 1
-    else:  # next
-        month += 1
-        if month > 12:
-            month = 1
-            year += 1
-
-    telegram_id = callback.from_user.id
-    lang = db.get_user_language(telegram_id)
-
-    min_date = datetime.now()
-    if calendar_type == 'check_out':
-        data = await state.get_data()
-        check_in = data.get('filters', {}).get('check_in')
-        if check_in:
-            min_date = datetime.strptime(check_in, "%Y-%m-%d") + timedelta(days=1)
-
-    await callback.message.edit_reply_markup(
-        reply_markup=get_calendar_keyboard(year, month, lang, min_date, calendar_type=calendar_type)
-    )
-    await callback.answer()
-
-@router.callback_query(F.data.startswith("date_"))
-async def process_date_selection(callback: CallbackQuery, state: FSMContext):
-    """Handle date selection from calendar"""
-    parts = callback.data.split("_")
-    calendar_type = parts[1]  # check_in or check_out
-    date_str = parts[2]
-
-    telegram_id = callback.from_user.id
-    lang = db.get_user_language(telegram_id)
-
-    data = await state.get_data()
-    filters = data.get('filters', {})
-
-    if calendar_type == 'check_in':
-        filters['check_in'] = date_str
-        await state.update_data(filters=filters)
-
-        # Show calendar for check-out date
-        min_date = datetime.strptime(date_str, "%Y-%m-%d") + timedelta(days=1)
-        await callback.message.edit_text(
-            get_text('select_check_out', lang),
-            reply_markup=get_calendar_keyboard(
-                min_date.year, min_date.month, lang, min_date,
-                calendar_type='check_out'
-            )
-        )
-        await state.set_state(SearchStates.selecting_check_out)
-    else:  # check_out
-        filters['check_out'] = date_str
-        await state.update_data(filters=filters)
-
-        # Show filters summary
-        await show_filters_summary(callback.message, filters, lang)
-        await state.set_state(SearchStates.viewing_apartments)
-
-    await callback.answer()
 
 async def show_filters_summary(message, filters: dict, lang: str):
     """Show active filters summary"""
@@ -553,21 +521,14 @@ async def show_filters_summary(message, filters: dict, lang: str):
     city_name = city['name_ru'] if lang == 'ru' else city['name_kk']
     district_name = district['name_ru'] if lang == 'ru' else district['name_kk']
 
-    check_in = datetime.strptime(filters['check_in'], "%Y-%m-%d").strftime("%d.%m.%Y")
-    check_out = datetime.strptime(filters['check_out'], "%Y-%m-%d").strftime("%d.%m.%Y")
-
-    text = get_text('active_filters', lang,
+    text = get_text('active_filters_no_dates', lang,
                     city=city_name,
-                    district=district_name,
-                    check_in=check_in,
-                    check_out=check_out)
+                    district=district_name)
 
     # Count available apartments
     apartments = db.get_apartments(
         city_id=filters['city_id'],
-        district_id=filters['district_id'],
-        check_in=filters['check_in'],
-        check_out=filters['check_out']
+        district_id=filters['district_id']
     )
     count = len(apartments)
 
@@ -588,9 +549,7 @@ async def show_apartments(callback: CallbackQuery, state: FSMContext):
 
     apartments = db.get_apartments(
         city_id=filters.get('city_id'),
-        district_id=filters.get('district_id'),
-        check_in=filters.get('check_in'),
-        check_out=filters.get('check_out')
+        district_id=filters.get('district_id')
     )
 
     if not apartments:

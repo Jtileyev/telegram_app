@@ -86,10 +86,16 @@ def get_districts_keyboard(districts: list, lang: str = 'ru'):
 
 def get_calendar_keyboard(year: int, month: int, lang: str = 'ru',
                           min_date: datetime = None, selected_date: str = None,
-                          calendar_type: str = 'check_in'):
+                          calendar_type: str = 'check_in', apartment_id: int = None):
     """Calendar inline keyboard for date selection"""
     if min_date is None:
         min_date = datetime.now()
+
+    # Get booked dates if apartment_id is provided
+    booked_dates = []
+    if apartment_id:
+        import database as db
+        booked_dates = db.get_booked_dates(apartment_id)
 
     month_names = get_text('month_names', lang)
     day_names = get_text('day_names', lang)
@@ -120,8 +126,11 @@ def get_calendar_keyboard(year: int, month: int, lang: str = 'ru',
                 date_obj = datetime(year, month, day)
                 date_str = date_obj.strftime("%Y-%m-%d")
 
+                # Check if date is booked
+                if date_str in booked_dates:
+                    row.append(InlineKeyboardButton(text="✖", callback_data="ignore"))
                 # Disable past dates
-                if date_obj.date() < min_date.date():
+                elif date_obj.date() < min_date.date():
                     row.append(InlineKeyboardButton(text="·", callback_data="ignore"))
                 elif date_str == selected_date:
                     row.append(InlineKeyboardButton(text=f"[{day}]", callback_data="ignore"))
