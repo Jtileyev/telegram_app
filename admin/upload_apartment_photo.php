@@ -53,7 +53,7 @@ if ($file['size'] > 5 * 1024 * 1024) {
 // Generate filename
 $ext = pathinfo($file['name'], PATHINFO_EXTENSION);
 $filename = 'apt_' . $apartment_id . '_' . uniqid() . '.' . $ext;
-$relativePath = 'apartments/' . $filename;
+$relativePath = 'uploads/apartments/' . $filename;
 $fullPath = UPLOADS_PATH . $filename;
 
 // Ensure directory exists
@@ -82,6 +82,6 @@ $photo_id = $db->lastInsertId();
 echo json_encode([
     'success' => true,
     'photo_id' => $photo_id,
-    'photo_url' => '../uploads/' . $relativePath,
+    'photo_url' => '../' . $relativePath,
     'is_main' => $is_main
 ]);
