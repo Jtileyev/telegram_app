@@ -67,7 +67,7 @@ $stats['users'] = $db->query("SELECT COUNT(*) FROM users")->fetchColumn();
 $stats['apartments'] = $db->query("SELECT COUNT(*) FROM apartments")->fetchColumn();
 $stats['bookings'] = $db->query("SELECT COUNT(*) FROM bookings")->fetchColumn();
 $stats['reviews'] = $db->query("SELECT COUNT(*) FROM reviews")->fetchColumn();
-$stats['landlords'] = $db->query("SELECT COUNT(*) FROM landlords")->fetchColumn();
+$stats['landlords'] = $db->query("SELECT COUNT(*) FROM users WHERE roles LIKE '%landlord%'")->fetchColumn();
 
 include 'header.php';
 ?>
