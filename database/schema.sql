@@ -36,7 +36,8 @@ CREATE TABLE IF NOT EXISTS landlords (
     telegram_id INTEGER UNIQUE,
     full_name TEXT NOT NULL,
     phone TEXT NOT NULL,
-    email TEXT,
+    email TEXT NOT NULL,
+    password TEXT,
     is_active BOOLEAN DEFAULT 1,
     created_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP,
     updated_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP
