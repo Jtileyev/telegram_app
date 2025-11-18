@@ -10,27 +10,33 @@ session_start();
 
 // Check if user is logged in
 function isLoggedIn() {
-    return isset($_SESSION['user_id']) && !empty($_SESSION['user_id']) && isset($_SESSION['user_role']);
+    return isset($_SESSION['user_id']) && !empty($_SESSION['user_id']) && isset($_SESSION['user_roles']);
 }
 
-// Get current user role ('admin' or 'landlord')
-function getUserRole() {
-    return $_SESSION['user_role'] ?? null;
+// Get current user roles (array)
+function getUserRoles() {
+    return $_SESSION['user_roles'] ?? [];
 }
 
-// Get current landlord ID (if role is landlord)
-function getLandlordId() {
-    return $_SESSION['landlord_id'] ?? null;
+// Check if user has specific role
+function hasRole($role) {
+    $roles = getUserRoles();
+    return in_array($role, $roles);
+}
+
+// Get current user ID
+function getUserId() {
+    return $_SESSION['user_id'] ?? null;
 }
 
 // Check if current user is admin
 function isAdmin() {
-    return isLoggedIn() && getUserRole() === 'admin';
+    return isLoggedIn() && hasRole('admin');
 }
 
 // Check if current user is landlord
 function isLandlord() {
-    return isLoggedIn() && getUserRole() === 'landlord';
+    return isLoggedIn() && hasRole('landlord');
 }
 
 // Redirect if not logged in

@@ -21,20 +21,20 @@ if (isset($_POST['update_status'])) {
 $statusFilter = $_GET['status'] ?? 'all';
 
 $query = "
-    SELECT b.*, u.full_name as user_name, u.phone as user_phone, u.telegram_id as user_telegram,
+    SELECT b.*, renter.full_name as user_name, renter.phone as user_phone, renter.telegram_id as user_telegram,
            a.title_ru as apartment_title, a.address,
-           l.full_name as landlord_name, l.phone as landlord_phone
+           landlord.full_name as landlord_name, landlord.phone as landlord_phone
     FROM bookings b
-    JOIN users u ON b.user_id = u.id
+    JOIN users renter ON b.user_id = renter.id
     JOIN apartments a ON b.apartment_id = a.id
-    JOIN landlords l ON b.landlord_id = l.id
+    JOIN users landlord ON b.landlord_id = landlord.id
     WHERE 1=1
 ";
 
 // Filter by landlord if not admin
-if (isLandlord()) {
+if (isLandlord() && !isAdmin()) {
     $query .= " AND b.landlord_id = ?";
-    $params = [getLandlordId()];
+    $params = [getUserId()];
 
     if ($statusFilter !== 'all') {
         $query .= " AND b.status = ?";

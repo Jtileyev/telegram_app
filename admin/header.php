@@ -105,6 +105,11 @@
                                 <i class="bi bi-database me-2"></i>SQLite Browser
                             </a>
                         </li>
+                        <li class="nav-item">
+                            <a class="nav-link <?= basename($_SERVER['PHP_SELF']) == 'db_admin.php' ? 'active' : '' ?>" href="db_admin.php">
+                                <i class="bi bi-database-gear me-2"></i>phpLiteAdmin
+                            </a>
+                        </li>
                         <?php endif; ?>
                         <li class="nav-item mt-4">
                             <a class="nav-link text-danger" href="logout.php">
