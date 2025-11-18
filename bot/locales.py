@@ -27,13 +27,16 @@ MESSAGES = {
         'btn_favorites': '⭐ Избранные',
         'btn_language': '🌐 Сменить язык',
         'btn_landlords': '🏠 Арендодателям',
+        'btn_clear_chat': '🗑 Очистить чат',
         'btn_back': '⬅️ Назад',
         'btn_main_menu': '🏠 Главное меню',
+        'chat_cleared': '✅ Чат очищен',
 
         # Search
         'search_title': '🔍 Поиск квартиры',
         'select_city': '🏙 Выберите город:',
         'select_district': '📍 Выберите район:',
+        'all_districts': '🌐 Все районы',
         'select_check_in': '📅 Выберите дату заселения:',
         'select_check_out': '📅 Выберите дату выезда:',
         'clear_filters': '🗑 Очистить фильтры',
@@ -206,13 +209,16 @@ MESSAGES = {
         'btn_favorites': '⭐ Таңдаулылар',
         'btn_language': '🌐 Тілді өзгерту',
         'btn_landlords': '🏠 Жалға берушілерге',
+        'btn_clear_chat': '🗑 Чатты тазалау',
         'btn_back': '⬅️ Артқа',
         'btn_main_menu': '🏠 Басты мәзір',
+        'chat_cleared': '✅ Чат тазаланды',
 
         # Search
         'search_title': '🔍 Пәтер іздеу',
         'select_city': '🏙 Қаланы таңдаңыз:',
         'select_district': '📍 Ауданды таңдаңыз:',
+        'all_districts': '🌐 Барлық аудандар',
         'select_check_in': '📅 Кіру күнін таңдаңыз:',
         'select_check_out': '📅 Шығу күнін таңдаңыз:',
         'clear_filters': '🗑 Сүзгілерді тазалау',
