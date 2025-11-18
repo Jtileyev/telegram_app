@@ -6,7 +6,7 @@ $db = getDB();
 $landlord = null;
 
 if (isset($_GET['id'])) {
-    $stmt = $db->prepare("SELECT * FROM landlords WHERE id = ?");
+    $stmt = $db->prepare("SELECT * FROM users WHERE id = ? AND roles LIKE '%landlord%'");
     $stmt->execute([$_GET['id']]);
     $landlord = $stmt->fetch();
     $pageTitle = 'Редактирование арендодателя';
@@ -22,7 +22,7 @@ if ($_SERVER['REQUEST_METHOD'] === 'POST') {
 
     if ($landlord) {
         $stmt = $db->prepare("
-            UPDATE landlords SET
+            UPDATE users SET
                 full_name = ?, phone = ?, email = ?, telegram_id = ?,
                 updated_at = CURRENT_TIMESTAMP
             WHERE id = ?
@@ -30,12 +30,32 @@ if ($_SERVER['REQUEST_METHOD'] === 'POST') {
         $stmt->execute([$full_name, $phone, $email, $telegram_id, $landlord['id']]);
         setFlash('success', 'Арендодатель обновлен');
     } else {
-        $stmt = $db->prepare("
-            INSERT INTO landlords (full_name, phone, email, telegram_id)
-            VALUES (?, ?, ?, ?)
-        ");
-        $stmt->execute([$full_name, $phone, $email, $telegram_id]);
-        setFlash('success', 'Арендодатель добавлен');
+        // Check if user with this email already exists
+        $existing = null;
+        if ($email) {
+            $stmt = $db->prepare("SELECT id, roles FROM users WHERE email = ?");
+            $stmt->execute([$email]);
+            $existing = $stmt->fetch();
+        }
+
+        if ($existing) {
+            // Add landlord role to existing user
+            $roles = json_decode($existing['roles'], true);
+            if (!in_array('landlord', $roles)) {
+                $roles[] = 'landlord';
+                $stmt = $db->prepare("UPDATE users SET roles = ? WHERE id = ?");
+                $stmt->execute([json_encode($roles), $existing['id']]);
+            }
+            setFlash('success', 'Роль арендодателя добавлена существующему пользователю');
+        } else {
+            // Create new user with landlord role
+            $stmt = $db->prepare("
+                INSERT INTO users (full_name, phone, email, telegram_id, roles, is_active)
+                VALUES (?, ?, ?, ?, ?, 1)
+            ");
+            $stmt->execute([$full_name, $phone, $email, $telegram_id, json_encode(['landlord'])]);
+            setFlash('success', 'Арендодатель добавлен');
+        }
     }
 
     header('Location: landlords.php');

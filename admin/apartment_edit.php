@@ -91,7 +91,7 @@ if ($_SERVER['REQUEST_METHOD'] === 'POST') {
 }
 
 // Get data for dropdowns
-$landlords = $db->query("SELECT id, full_name, phone FROM landlords WHERE is_active = 1 ORDER BY full_name")->fetchAll();
+$landlords = $db->query("SELECT id, full_name, phone FROM users WHERE is_active = 1 AND roles LIKE '%landlord%' ORDER BY full_name")->fetchAll();
 $cities = $db->query("SELECT id, name_ru FROM cities ORDER BY name_ru")->fetchAll();
 
 $selectedAmenities = $apartment && $apartment['amenities'] ? json_decode($apartment['amenities'], true) : [];

@@ -11,14 +11,25 @@ $db = getDB();
 if (isset($_POST['delete_landlord']) && is_numeric($_POST['delete_landlord'])) {
     $landlordId = $_POST['delete_landlord'];
 
-    // Check if landlord exists
-    $stmt = $db->prepare("SELECT id FROM landlords WHERE id = ?");
+    // Check if user exists and has landlord role
+    $stmt = $db->prepare("SELECT id, roles FROM users WHERE id = ?");
     $stmt->execute([$landlordId]);
+    $user = $stmt->fetch();
 
-    if ($stmt->fetch()) {
-        // Delete landlord (cascading will handle related records)
-        $stmt = $db->prepare("DELETE FROM landlords WHERE id = ?");
-        $stmt->execute([$landlordId]);
+    if ($user) {
+        $roles = json_decode($user['roles'], true);
+        // Remove landlord role
+        $roles = array_diff($roles, ['landlord']);
+
+        if (empty($roles)) {
+            // If no roles left, deactivate user
+            $stmt = $db->prepare("UPDATE users SET is_active = 0 WHERE id = ?");
+            $stmt->execute([$landlordId]);
+        } else {
+            // Update roles
+            $stmt = $db->prepare("UPDATE users SET roles = ? WHERE id = ?");
+            $stmt->execute([json_encode(array_values($roles)), $landlordId]);
+        }
         setFlash('success', 'Арендодатель успешно удален');
     } else {
         setFlash('danger', 'Арендодатель не найден');
@@ -30,7 +41,7 @@ if (isset($_POST['delete_landlord']) && is_numeric($_POST['delete_landlord'])) {
 
 // Handle toggle status
 if (isset($_GET['toggle']) && is_numeric($_GET['toggle'])) {
-    $stmt = $db->prepare("UPDATE landlords SET is_active = NOT is_active WHERE id = ?");
+    $stmt = $db->prepare("UPDATE users SET is_active = NOT is_active WHERE id = ?");
     $stmt->execute([$_GET['toggle']]);
     setFlash('success', 'Статус обновлен');
     header('Location: landlords.php');
@@ -38,11 +49,12 @@ if (isset($_GET['toggle']) && is_numeric($_GET['toggle'])) {
 }
 
 $stmt = $db->query("
-    SELECT l.*,
-           (SELECT COUNT(*) FROM apartments WHERE landlord_id = l.id) as apartments_count,
-           (SELECT COUNT(*) FROM bookings WHERE landlord_id = l.id) as bookings_count
-    FROM landlords l
-    ORDER BY l.created_at DESC
+    SELECT u.*,
+           (SELECT COUNT(*) FROM apartments WHERE landlord_id = u.id) as apartments_count,
+           (SELECT COUNT(*) FROM bookings WHERE landlord_id = u.id) as bookings_count
+    FROM users u
+    WHERE u.roles LIKE '%landlord%'
+    ORDER BY u.created_at DESC
 ");
 $landlords = $stmt->fetchAll();
 
