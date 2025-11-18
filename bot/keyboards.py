@@ -175,28 +175,9 @@ def get_search_filters_keyboard(filters: dict, count: int, lang: str = 'ru'):
     return InlineKeyboardMarkup(inline_keyboard=buttons)
 
 def get_apartment_card_keyboard(apartment_id: int, is_favorite: bool, lang: str = 'ru',
-                                 has_prev: bool = False, has_next: bool = False,
-                                 photo_index: int = 0, photo_count: int = 0,
-                                 has_prev_photo: bool = False, has_next_photo: bool = False):
+                                 has_prev: bool = False, has_next: bool = False):
     """Apartment card inline keyboard"""
     buttons = []
-
-    # Photo navigation buttons (if multiple photos)
-    if photo_count > 1:
-        photo_nav_row = []
-        if has_prev_photo:
-            photo_nav_row.append(InlineKeyboardButton(text="◀️ Фото", callback_data=f"photo_prev_{apartment_id}"))
-
-        # Photo counter in the middle
-        photo_nav_row.append(InlineKeyboardButton(
-            text=f"{photo_index + 1}/{photo_count}",
-            callback_data="ignore"
-        ))
-
-        if has_next_photo:
-            photo_nav_row.append(InlineKeyboardButton(text="Фото ▶️", callback_data=f"photo_next_{apartment_id}"))
-
-        buttons.append(photo_nav_row)
 
     # Apartment navigation buttons
     nav_row = []

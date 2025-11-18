@@ -85,6 +85,27 @@ class TestBotHandlers(unittest.TestCase):
 
     def test_search_filters(self):
         """Test apartment search with filters"""
+        # Create test cities and districts for testing
+        conn = db.get_connection()
+        cursor = conn.cursor()
+
+        # Insert test city
+        cursor.execute("""
+            INSERT INTO cities (name_ru, name_kk, created_at)
+            VALUES ('Тест Город', 'Тест Қала', CURRENT_TIMESTAMP)
+        """)
+        city_id = cursor.lastrowid
+
+        # Insert test districts
+        cursor.execute("""
+            INSERT INTO districts (city_id, name_ru, name_kk, created_at)
+            VALUES (?, 'Тест Район 1', 'Тест Аудан 1', CURRENT_TIMESTAMP)
+        """, (city_id,))
+        district_id = cursor.lastrowid
+
+        conn.commit()
+        conn.close()
+
         # Get all cities
         cities = db.get_cities()
         self.assertGreater(len(cities), 0)
