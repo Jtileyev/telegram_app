@@ -14,6 +14,10 @@ def get_connection():
 def init_db():
     """Initialize database with schema"""
     schema_path = Path(__file__).parent.parent / 'database' / 'schema.sql'
+
+    if not schema_path.exists():
+        raise FileNotFoundError(f"Schema file not found: {schema_path}")
+
     with open(schema_path, 'r', encoding='utf-8') as f:
         schema = f.read()
 
@@ -21,6 +25,7 @@ def init_db():
     conn.executescript(schema)
     conn.commit()
     conn.close()
+    print("✓ Database schema initialized")
 
 # User operations
 def get_user(telegram_id: int):
