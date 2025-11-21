@@ -290,17 +290,92 @@ def get_apartment_photos(apartment_id: int):
 # Booking operations
 def create_booking(user_id: int, apartment_id: int, landlord_id: int,
                    check_in: str, check_out: str, total_price: float, platform_fee: float):
-    """Create new booking"""
+    """Create new booking with validation"""
+    from datetime import datetime as dt, date as dt_date
+
+    # Валидация: check_in и check_out должны быть строками в формате YYYY-MM-DD
+    try:
+        check_in_date = dt.strptime(check_in, '%Y-%m-%d').date()
+        check_out_date = dt.strptime(check_out, '%Y-%m-%d').date()
+    except ValueError:
+        raise ValueError("Invalid date format. Expected YYYY-MM-DD")
+
+    # Валидация 1: Даты не должны быть в прошлом
+    today = dt_date.today()
+    if check_in_date < today:
+        raise ValueError("Check-in date cannot be in the past")
+
+    # Валидация 2: check_out должен быть после check_in
+    if check_out_date <= check_in_date:
+        raise ValueError("Check-out date must be after check-in date")
+
+    # Валидация 3: Минимальная длительность бронирования (1 день)
+    days = (check_out_date - check_in_date).days
+    if days < 1:
+        raise ValueError("Minimum booking duration is 1 day")
+
+    # Валидация 4: Проверка активности пользователя и арендодателя
     conn = get_connection()
-    conn.execute("""
-        INSERT INTO bookings (user_id, apartment_id, landlord_id,
-                             check_in_date, check_out_date, total_price, platform_fee)
-        VALUES (?, ?, ?, ?, ?, ?, ?)
-    """, (user_id, apartment_id, landlord_id, check_in, check_out, total_price, platform_fee))
-    conn.commit()
-    booking_id = conn.execute("SELECT last_insert_rowid()").fetchone()[0]
-    conn.close()
-    return booking_id
+
+    # Проверка активности пользователя
+    user_check = conn.execute("SELECT is_active FROM users WHERE id = ?", (user_id,)).fetchone()
+    if not user_check or not user_check['is_active']:
+        conn.close()
+        raise ValueError("User account is not active")
+
+    # Проверка активности арендодателя
+    landlord_check = conn.execute("SELECT is_active FROM users WHERE id = ?", (landlord_id,)).fetchone()
+    if not landlord_check or not landlord_check['is_active']:
+        conn.close()
+        raise ValueError("Landlord account is not active")
+
+    # Проверка активности квартиры
+    apartment_check = conn.execute(
+        "SELECT is_active FROM apartments WHERE id = ? AND landlord_id = ?",
+        (apartment_id, landlord_id)
+    ).fetchone()
+    if not apartment_check or not apartment_check['is_active']:
+        conn.close()
+        raise ValueError("Apartment is not active")
+
+    # Валидация 5: Проверка доступности дат (race condition защита)
+    # Используем транзакцию для атомарности проверки и создания
+    try:
+        conn.execute("BEGIN IMMEDIATE")
+
+        # Проверяем доступность дат
+        overlapping = conn.execute("""
+            SELECT COUNT(*) as count FROM bookings
+            WHERE apartment_id = ?
+              AND status IN ('confirmed', 'completed')
+              AND (
+                  (check_in_date <= ? AND check_out_date > ?)
+                  OR (check_in_date < ? AND check_out_date >= ?)
+                  OR (check_in_date >= ? AND check_out_date <= ?)
+              )
+        """, (apartment_id, check_in, check_in, check_out, check_out, check_in, check_out)).fetchone()
+
+        if overlapping['count'] > 0:
+            conn.rollback()
+            conn.close()
+            raise ValueError("Apartment is already booked for selected dates")
+
+        # Создаем бронирование
+        conn.execute("""
+            INSERT INTO bookings (user_id, apartment_id, landlord_id,
+                                 check_in_date, check_out_date, total_price, platform_fee)
+            VALUES (?, ?, ?, ?, ?, ?, ?)
+        """, (user_id, apartment_id, landlord_id, check_in, check_out, total_price, platform_fee))
+
+        booking_id = conn.execute("SELECT last_insert_rowid()").fetchone()[0]
+        conn.commit()
+        conn.close()
+        return booking_id
+
+    except Exception as e:
+        conn.rollback()
+        conn.close()
+        raise
 
 def get_user_bookings(user_id: int):
     """Get user's booking history"""

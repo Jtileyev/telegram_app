@@ -763,6 +763,9 @@ async def start_booking(callback: CallbackQuery, state: FSMContext):
 
 async def create_booking_request(message: Message, state: FSMContext, user: dict):
     """Create booking request"""
+    from notifications import notify_landlord_new_booking
+    import os
+
     data = await state.get_data()
     apartment_id = data.get('booking_apartment_id')
     filters = data.get('filters', {})
@@ -780,61 +783,83 @@ async def create_booking_request(message: Message, state: FSMContext, user: dict
     fee_percent = float(db.get_setting('platform_fee_percent') or 5)
     platform_fee = total_price * (fee_percent / 100)
 
-    # Create booking
-    booking_id = db.create_booking(
-        user['id'], apartment_id, apartment['landlord_id'],
-        filters['check_in'], filters['check_out'],
-        total_price, platform_fee
-    )
-
-    # Log booking creation
-    log_booking_action(
-        audit_logger,
-        user['id'],
-        booking_id,
-        "Booking created",
-        f"Apartment {apartment_id}, Total: {total_price}₸, Dates: {filters['check_in']} to {filters['check_out']}"
-    )
-    logger.info(f"Booking {booking_id} created by user {user['id']} for apartment {apartment_id}")
-
-    await message.answer(
-        get_text('booking_created', lang),
-        reply_markup=get_main_menu_keyboard(lang)
-    )
-
-    # Notify landlord about new booking
+    # Create booking with validation
     try:
-        # Get landlord telegram_id from database
-        landlord = db.get_user(telegram_id=None)  # We need to get by ID
-        landlord_data = db.get_connection().execute(
-            "SELECT telegram_id, full_name FROM users WHERE id = ?",
-            (apartment['landlord_id'],)
-        ).fetchone()
+        booking_id = db.create_booking(
+            user['id'], apartment_id, apartment['landlord_id'],
+            filters['check_in'], filters['check_out'],
+            total_price, platform_fee
+        )
 
-        if landlord_data and landlord_data['telegram_id']:
-            apartment_title = apartment['title_ru'] if lang == 'ru' else apartment['title_kk']
+        # Log booking creation
+        log_booking_action(
+            audit_logger,
+            user['id'],
+            booking_id,
+            "Booking created",
+            f"Apartment {apartment_id}, Total: {total_price}₸, Dates: {filters['check_in']} to {filters['check_out']}"
+        )
+        logger.info(f"Booking {booking_id} created by user {user['id']} for apartment {apartment_id}")
 
-            # Import config to get bot token
-            from config import get_bot_token
-            bot_token = get_bot_token()
+        await message.answer(
+            get_text('booking_created', lang),
+            reply_markup=get_main_menu_keyboard(lang)
+        )
 
-            # Send notification to landlord
-            await notify_landlord_new_booking(
-                landlord_telegram_id=landlord_data['telegram_id'],
-                booking_id=booking_id,
-                apartment_title=apartment_title,
-                guest_name=user['full_name'],
-                check_in=filters['check_in'],
-                check_out=filters['check_out'],
-                total_price=total_price,
-                bot_token=bot_token
-            )
-            logger.info(f"Sent new booking notification to landlord {landlord_data['telegram_id']}")
-    except Exception as e:
-        # Don't fail the booking if notification fails
-        log_error(logger, e, "notify_landlord_new_booking")
+        # Notify landlord about new booking
+        try:
+            # Get landlord telegram_id from database
+            landlord_data = db.get_connection().execute(
+                "SELECT telegram_id, full_name FROM users WHERE id = ?",
+                (apartment['landlord_id'],)
+            ).fetchone()
 
-    await state.clear()
+            if landlord_data and landlord_data['telegram_id']:
+                apartment_title = apartment['title_ru'] if lang == 'ru' else apartment['title_kk']
+
+                # Import config to get bot token
+                from config import get_bot_token
+                bot_token = get_bot_token()
+
+                # Send notification to landlord
+                await notify_landlord_new_booking(
+                    landlord_telegram_id=landlord_data['telegram_id'],
+                    booking_id=booking_id,
+                    apartment_title=apartment_title,
+                    guest_name=user['full_name'],
+                    guest_phone=user.get('phone', 'N/A'),
+                    check_in=filters['check_in'],
+                    check_out=filters['check_out'],
+                    total_price=total_price,
+                    bot_token=bot_token
+                )
+                logger.info(f"Sent new booking notification to landlord {landlord_data['telegram_id']}")
+        except Exception as e:
+            # Don't fail the booking if notification fails
+            log_error(logger, e, "notify_landlord_new_booking")
+
+        await state.clear()
+
+    except ValueError as e:
+        # Обработка ошибок валидации
+        error_messages = {
+            "Check-in date cannot be in the past": "booking_past_dates",
+            "Check-out date must be after check-in date": "booking_invalid_dates",
+            "Minimum booking duration is 1 day": "booking_min_duration",
+            "User account is not active": "booking_user_inactive",
+            "Landlord account is not active": "booking_landlord_inactive",
+            "Apartment is not active": "booking_apartment_inactive",
+            "Apartment is already booked for selected dates": "apartment_booked"
+        }
+
+        error_key = error_messages.get(str(e), 'booking_error')
+        error_text = get_text(error_key, lang) if error_key in ['apartment_booked'] else str(e)
+
+        await message.answer(
+            error_text,
+            reply_markup=get_main_menu_keyboard(lang)
+        )
+        await state.clear()
 
 @router.message(BookingStates.waiting_contact, F.contact)
 async def process_contact(message: Message, state: FSMContext):

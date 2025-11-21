@@ -47,6 +47,7 @@ async def notify_landlord_new_booking(
     booking_id: int,
     apartment_title: str,
     guest_name: str,
+    guest_phone: str,
     check_in: str,
     check_out: str,
     total_price: float,
@@ -55,13 +56,17 @@ async def notify_landlord_new_booking(
     """Notify landlord about new booking"""
     message = f"""🔔 <b>Новое бронирование!</b>
 
-Квартира: {apartment_title}
-Гость: {guest_name}
-Заезд: {check_in}
-Выезд: {check_out}
-Сумма: {total_price:,.0f} ₸
+📍 Квартира: {apartment_title}
+👤 Гость: {guest_name}
+📞 Телефон: {guest_phone}
+
+📅 Заезд: {check_in}
+📅 Выезд: {check_out}
+💰 Сумма: {total_price:,.0f} ₸
 
 Бронирование #{booking_id}
+
+⏳ Статус: Ожидает подтверждения
 
 Пожалуйста, подтвердите или отклоните бронирование в админ-панели."""
 
