@@ -42,23 +42,32 @@ def notify_booking_status(telegram_id: int, status: str, apartment_title: str, b
     asyncio.run(send_notification(telegram_id, message, bot_token))
 
 
-def notify_landlord_new_booking(landlord_telegram_id: int, booking_info: dict, bot_token: str):
-    """Notify landlord about new booking request"""
-    message = f"""🔔 <b>Новая заявка на бронирование!</b>
+async def notify_landlord_new_booking(
+    landlord_telegram_id: int,
+    booking_id: int,
+    apartment_title: str,
+    guest_name: str,
+    guest_phone: str,
+    check_in: str,
+    check_out: str,
+    total_price: float,
+    bot_token: str
+):
+    """Notify landlord about new booking"""
+    message = f"""🔔 <b>Новое бронирование!</b>
 
-📍 Квартира: {booking_info.get('apartment_title', 'N/A')}
-👤 Гость: {booking_info.get('user_name', 'N/A')}
-📞 Телефон: {booking_info.get('user_phone', 'N/A')}
+📍 Квартира: {apartment_title}
+👤 Гость: {guest_name}
+📞 Телефон: {guest_phone}
 
-📅 Заезд: {booking_info.get('check_in', 'N/A')}
-📅 Выезд: {booking_info.get('check_out', 'N/A')}
-💰 Сумма: {booking_info.get('total_price', 0)} ₸
+📅 Заезд: {check_in}
+📅 Выезд: {check_out}
+💰 Сумма: {total_price:,.0f} ₸
+
+Бронирование #{booking_id}
 
 ⏳ Статус: Ожидает подтверждения
 
-Пожалуйста, подтвердите или отклоните бронирование в панели управления."""
+Пожалуйста, подтвердите или отклоните бронирование в админ-панели."""
 
-    try:
-        asyncio.run(send_notification(landlord_telegram_id, message, bot_token))
-    except Exception as e:
-        print(f"Error sending notification to landlord: {e}")
+    await send_notification(landlord_telegram_id, message, bot_token)

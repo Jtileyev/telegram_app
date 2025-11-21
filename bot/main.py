@@ -12,10 +12,13 @@ from aiogram.fsm.storage.memory import MemoryStorage
 import database as db
 from keyboards import *
 from locales import get_text
+from logger import setup_logger, get_audit_logger, log_user_action, log_booking_action, log_error
+from rate_limiter import default_rate_limiter
+from notifications import notify_landlord_new_booking
 
-# Configure logging
-logging.basicConfig(level=logging.INFO)
-logger = logging.getLogger(__name__)
+# Configure logging with new centralized system
+logger = setup_logger('telegram_bot')
+audit_logger = get_audit_logger()
 
 # Bot and dispatcher will be initialized after database
 bot = None
@@ -248,6 +251,10 @@ async def process_phone(message: Message, state: FSMContext):
 
     db.update_user(telegram_id, phone=phone)
     user = db.get_user(telegram_id)
+
+    # Log successful registration
+    log_user_action(logger, telegram_id, "Registration completed", f"Phone: {phone}")
+    audit_logger.info(f"New user registered: {telegram_id}")
 
     await state.clear()
     await message.answer(
@@ -784,6 +791,16 @@ async def create_booking_request(message: Message, state: FSMContext, user: dict
             total_price, platform_fee
         )
 
+        # Log booking creation
+        log_booking_action(
+            audit_logger,
+            user['id'],
+            booking_id,
+            "Booking created",
+            f"Apartment {apartment_id}, Total: {total_price}₸, Dates: {filters['check_in']} to {filters['check_out']}"
+        )
+        logger.info(f"Booking {booking_id} created by user {user['id']} for apartment {apartment_id}")
+
         await message.answer(
             get_text('booking_created', lang),
             reply_markup=get_main_menu_keyboard(lang)
@@ -791,26 +808,35 @@ async def create_booking_request(message: Message, state: FSMContext, user: dict
 
         # Notify landlord about new booking
         try:
-            booking = db.get_booking_by_id(booking_id)
-            booking_info = {
-                'apartment_title': apartment.get('title_' + lang, apartment.get('title_ru', 'N/A')),
-                'user_name': user.get('full_name', 'N/A'),
-                'user_phone': user.get('phone', 'N/A'),
-                'check_in': filters['check_in'],
-                'check_out': filters['check_out'],
-                'total_price': total_price
-            }
+            # Get landlord telegram_id from database
+            landlord_data = db.get_connection().execute(
+                "SELECT telegram_id, full_name FROM users WHERE id = ?",
+                (apartment['landlord_id'],)
+            ).fetchone()
 
-            bot_token = os.getenv('BOT_TOKEN') or db.get_setting('bot_token')
-            if booking and booking.get('landlord_telegram_id'):
-                notify_landlord_new_booking(
-                    booking['landlord_telegram_id'],
-                    booking_info,
-                    bot_token
+            if landlord_data and landlord_data['telegram_id']:
+                apartment_title = apartment['title_ru'] if lang == 'ru' else apartment['title_kk']
+
+                # Import config to get bot token
+                from config import get_bot_token
+                bot_token = get_bot_token()
+
+                # Send notification to landlord
+                await notify_landlord_new_booking(
+                    landlord_telegram_id=landlord_data['telegram_id'],
+                    booking_id=booking_id,
+                    apartment_title=apartment_title,
+                    guest_name=user['full_name'],
+                    guest_phone=user.get('phone', 'N/A'),
+                    check_in=filters['check_in'],
+                    check_out=filters['check_out'],
+                    total_price=total_price,
+                    bot_token=bot_token
                 )
+                logger.info(f"Sent new booking notification to landlord {landlord_data['telegram_id']}")
         except Exception as e:
-            print(f"Error notifying landlord: {e}")
-            # Не прерываем процесс, если уведомление не отправилось
+            # Don't fail the booking if notification fails
+            log_error(logger, e, "notify_landlord_new_booking")
 
         await state.clear()
 
@@ -1102,16 +1128,8 @@ async def show_booking_details(callback: CallbackQuery):
     telegram_id = callback.from_user.id
     lang = db.get_user_language(telegram_id)
 
-    # Get booking from database
-    conn = db.get_connection()
-    cursor = conn.execute("""
-        SELECT b.*, a.title_ru, a.title_kk, a.address
-        FROM bookings b
-        JOIN apartments a ON b.apartment_id = a.id
-        WHERE b.id = ?
-    """, (booking_id,))
-    booking = cursor.fetchone()
-    conn.close()
+    # Get booking from database using database abstraction
+    booking = db.get_booking_by_id(booking_id)
 
     if booking:
         title = booking['title_ru'] if lang == 'ru' else booking['title_kk']
@@ -1184,10 +1202,8 @@ async def mark_helpful(callback: CallbackQuery):
     telegram_id = callback.from_user.id
     lang = db.get_user_language(telegram_id)
 
-    conn = db.get_connection()
-    conn.execute("UPDATE reviews SET helpful_count = helpful_count + 1 WHERE id = ?", (review_id,))
-    conn.commit()
-    conn.close()
+    # Use database abstraction for updating helpful count
+    db.increment_review_helpful_count(review_id)
 
     await callback.answer(get_text('marked_helpful', lang))
 
@@ -1198,10 +1214,8 @@ async def mark_not_helpful(callback: CallbackQuery):
     telegram_id = callback.from_user.id
     lang = db.get_user_language(telegram_id)
 
-    conn = db.get_connection()
-    conn.execute("UPDATE reviews SET not_helpful_count = not_helpful_count + 1 WHERE id = ?", (review_id,))
-    conn.commit()
-    conn.close()
+    # Use database abstraction for updating not helpful count
+    db.increment_review_not_helpful_count(review_id)
 
     await callback.answer(get_text('marked_not_helpful', lang))
 
@@ -1286,6 +1300,11 @@ async def main():
     except ValueError as e:
         logger.error(f"Failed to get bot token: {e}")
         return
+
+    # Register rate limiting middleware
+    dp.message.middleware(default_rate_limiter)
+    dp.callback_query.middleware(default_rate_limiter)
+    logger.info("Rate limiting middleware enabled (10 req/min, burst 20)")
 
     # Include router
     dp.include_router(router)
