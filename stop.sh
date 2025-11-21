@@ -5,7 +5,9 @@ RED='\033[0;31m'
 GREEN='\033[0;32m'
 NC='\033[0m' # No Color
 
-PROJECT_DIR="/home/jaras/vscode_projects/telegram_app"
+# Директория проекта (автоматическое определение)
+SCRIPT_DIR="$(cd "$(dirname "${BASH_SOURCE[0]}")" && pwd)"
+PROJECT_DIR="$SCRIPT_DIR"
 
 cd "$PROJECT_DIR" || exit 1
 

@@ -586,6 +586,26 @@ def can_leave_review(user_id: int, booking_id: int):
     conn.close()
     return result
 
+def increment_review_helpful_count(review_id: int):
+    """Increment helpful count for a review"""
+    conn = get_connection()
+    conn.execute(
+        "UPDATE reviews SET helpful_count = helpful_count + 1 WHERE id = ?",
+        (review_id,)
+    )
+    conn.commit()
+    conn.close()
+
+def increment_review_not_helpful_count(review_id: int):
+    """Increment not helpful count for a review"""
+    conn = get_connection()
+    conn.execute(
+        "UPDATE reviews SET not_helpful_count = not_helpful_count + 1 WHERE id = ?",
+        (review_id,)
+    )
+    conn.commit()
+    conn.close()
+
 # Landlord operations
 def create_landlord_request(telegram_id: int, full_name: str, phone: str, email: str):
     """Create landlord connection request"""
