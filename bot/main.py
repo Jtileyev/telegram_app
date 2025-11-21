@@ -79,7 +79,7 @@ def format_price(price: float) -> str:
     """Format price with thousands separator"""
     return "{:,.0f}".format(price).replace(',', ' ')
 
-def format_apartment_card(apartment: dict, lang: str = 'ru') -> str:
+def format_apartment_card(apartment: dict, lang: str = 'ru', user_id: int = None) -> str:
     """Format apartment information as text"""
     name_key = 'name_ru' if lang == 'ru' else 'name_kk'
     title_key = 'title_ru' if lang == 'ru' else 'title_kk'
@@ -87,8 +87,24 @@ def format_apartment_card(apartment: dict, lang: str = 'ru') -> str:
 
     text = f"🏠 *{apartment[title_key]}*\n\n"
 
-    if apartment.get('promotion'):
-        text += f"🎁 {apartment['promotion']}\n\n"
+    # Show promotion information if available
+    if apartment.get('promotion_name'):
+        promo_text = f"🎁 *{apartment['promotion_name']}*\n"
+        promo_text += f"   {apartment['promotion_bookings_required']}-е заселение → {apartment['promotion_free_days']} "
+        promo_text += "день" if apartment['promotion_free_days'] == 1 else "дня" if apartment['promotion_free_days'] < 5 else "дней"
+        promo_text += " бесплатно\n"
+
+        # Show user's progress if user_id is provided
+        if user_id:
+            progress = db.get_user_promotion_progress(user_id, apartment['id'])
+            if progress:
+                current = progress['completed_bookings']
+                required = progress['bookings_required']
+                promo_text += f"   📊 Ваш прогресс: {current}/{required}\n"
+                if current + 1 >= required:
+                    promo_text += f"   ✨ Следующее бронирование — с бонусом!\n"
+
+        text += promo_text + "\n"
 
     text += get_text('price_per_day', lang, price=format_price(apartment['price_per_day'])) + "\n"
     text += get_text('address', lang, address=apartment['address']) + "\n\n"
@@ -112,9 +128,9 @@ def format_apartment_card(apartment: dict, lang: str = 'ru') -> str:
 
     return text
 
-async def send_apartment_card(message: Message, apartment: dict, keyboard, lang: str):
+async def send_apartment_card(message: Message, apartment: dict, keyboard, lang: str, user_id: int = None):
     """Send apartment card with photos and keyboard"""
-    text = format_apartment_card(apartment, lang)
+    text = format_apartment_card(apartment, lang, user_id)
     photos = apartment.get('photos', [])
 
     if photos:
@@ -638,7 +654,7 @@ async def show_apartment(message: Message, state: FSMContext, index: int, user: 
         has_next=has_next
     )
 
-    await send_apartment_card(message, apartment, keyboard, lang)
+    await send_apartment_card(message, apartment, keyboard, lang, user['id'])
     await state.update_data(apt_index=index)
 
 @router.callback_query(F.data.startswith("apt_"))
@@ -777,7 +793,16 @@ async def create_booking_request(message: Message, state: FSMContext, user: dict
     check_in = datetime.strptime(filters['check_in'], "%Y-%m-%d")
     check_out = datetime.strptime(filters['check_out'], "%Y-%m-%d")
     days = (check_out - check_in).days
-    total_price = apartment['price_per_day'] * days
+    original_total_price = apartment['price_per_day'] * days
+
+    # Check for promotion benefit
+    should_apply_bonus, free_days, progress_info = db.calculate_promotion_benefit(
+        user['id'], apartment_id, days
+    )
+
+    discount_days = free_days if should_apply_bonus else 0
+    paid_days = days - discount_days
+    total_price = apartment['price_per_day'] * paid_days
 
     # Platform fee (5%)
     fee_percent = float(db.get_setting('platform_fee_percent') or 5)
@@ -791,6 +816,27 @@ async def create_booking_request(message: Message, state: FSMContext, user: dict
             total_price, platform_fee
         )
 
+        # Apply promotion discount if applicable
+        if should_apply_bonus and apartment.get('promotion_id'):
+            db.apply_promotion_to_booking(
+                booking_id,
+                apartment['promotion_id'],
+                discount_days,
+                original_total_price
+            )
+
+        # Send confirmation message
+        confirmation_text = get_text('booking_created', lang) + "\n\n"
+        confirmation_text += f"📅 {filters['check_in']} - {filters['check_out']}\n"
+        confirmation_text += f"💰 {get_text('total', lang)}: {format_price(total_price)} ₸\n"
+
+        if should_apply_bonus:
+            confirmation_text += f"\n🎉 *{get_text('promotion_applied', lang)}*\n"
+            confirmation_text += f"🎁 -{discount_days} "
+            confirmation_text += "день" if discount_days == 1 else "дня" if discount_days < 5 else "дней"
+            confirmation_text += " бесплатно!\n"
+            confirmation_text += f"💵 Вы экономите: {format_price(original_total_price - total_price)} ₸\n"
+
         # Log booking creation
         log_booking_action(
             audit_logger,
@@ -802,7 +848,8 @@ async def create_booking_request(message: Message, state: FSMContext, user: dict
         logger.info(f"Booking {booking_id} created by user {user['id']} for apartment {apartment_id}")
 
         await message.answer(
-            get_text('booking_created', lang),
+            confirmation_text,
+            parse_mode="Markdown",
             reply_markup=get_main_menu_keyboard(lang)
         )
 

@@ -253,11 +253,15 @@ def get_apartment_by_id(apartment_id: int):
         SELECT a.*, u.phone as landlord_phone, u.full_name as landlord_name,
                u.telegram_id as landlord_telegram_id,
                c.name_ru as city_name_ru, c.name_kk as city_name_kk,
-               d.name_ru as district_name_ru, d.name_kk as district_name_kk
+               d.name_ru as district_name_ru, d.name_kk as district_name_kk,
+               p.name as promotion_name, p.description as promotion_description,
+               p.bookings_required as promotion_bookings_required,
+               p.free_days as promotion_free_days, p.is_active as promotion_active
         FROM apartments a
         JOIN users u ON a.landlord_id = u.id
         JOIN cities c ON a.city_id = c.id
         JOIN districts d ON a.district_id = d.id
+        LEFT JOIN promotions p ON a.promotion_id = p.id
         WHERE a.id = ?
     """, (apartment_id,))
     apt = cursor.fetchone()
@@ -420,6 +424,10 @@ def update_booking_status(booking_id: int, status: str):
     )
     conn.commit()
     conn.close()
+
+    # If booking is completed, update promotion progress
+    if status == 'completed':
+        complete_booking_with_promotion(booking_id)
 
 def check_apartment_availability(apartment_id: int, check_in: str, check_out: str):
     """Check if apartment is available for given dates (only confirmed bookings block dates)"""
@@ -668,3 +676,227 @@ def set_setting(key: str, value: str):
     )
     conn.commit()
     conn.close()
+
+# Promotion operations
+def get_promotions(active_only: bool = False):
+    """Get all promotions"""
+    conn = get_connection()
+    query = "SELECT * FROM promotions"
+    if active_only:
+        query += " WHERE is_active = 1"
+    query += " ORDER BY created_at DESC"
+    cursor = conn.execute(query)
+    promotions = [dict(row) for row in cursor.fetchall()]
+    conn.close()
+    return promotions
+
+def get_promotion_by_id(promotion_id: int):
+    """Get promotion by ID"""
+    conn = get_connection()
+    cursor = conn.execute("SELECT * FROM promotions WHERE id = ?", (promotion_id,))
+    promotion = cursor.fetchone()
+    conn.close()
+    return dict(promotion) if promotion else None
+
+def create_promotion(name: str, description: str, bookings_required: int, free_days: int, is_active: bool = True):
+    """Create new promotion"""
+    conn = get_connection()
+    conn.execute("""
+        INSERT INTO promotions (name, description, bookings_required, free_days, is_active)
+        VALUES (?, ?, ?, ?, ?)
+    """, (name, description, bookings_required, free_days, is_active))
+    conn.commit()
+    promotion_id = conn.execute("SELECT last_insert_rowid()").fetchone()[0]
+    conn.close()
+    return promotion_id
+
+def update_promotion(promotion_id: int, **kwargs):
+    """Update promotion data"""
+    conn = get_connection()
+    updates = ', '.join([f"{k} = ?" for k in kwargs.keys()])
+    values = list(kwargs.values()) + [promotion_id]
+    conn.execute(
+        f"UPDATE promotions SET {updates}, updated_at = CURRENT_TIMESTAMP WHERE id = ?",
+        values
+    )
+    conn.commit()
+    conn.close()
+
+def delete_promotion(promotion_id: int):
+    """Delete promotion (this will set apartment promotion_id to NULL due to CASCADE)"""
+    conn = get_connection()
+    conn.execute("DELETE FROM promotions WHERE id = ?", (promotion_id,))
+    conn.commit()
+    conn.close()
+
+# User promotion progress operations
+def get_user_promotion_progress(user_id: int, apartment_id: int):
+    """Get user's promotion progress for specific apartment"""
+    conn = get_connection()
+    cursor = conn.execute("""
+        SELECT upp.*, p.bookings_required, p.free_days, p.name as promotion_name
+        FROM user_promotion_progress upp
+        JOIN promotions p ON upp.promotion_id = p.id
+        WHERE upp.user_id = ? AND upp.apartment_id = ?
+    """, (user_id, apartment_id))
+    progress = cursor.fetchone()
+    conn.close()
+    return dict(progress) if progress else None
+
+def init_user_promotion_progress(user_id: int, apartment_id: int, promotion_id: int):
+    """Initialize or get user's promotion progress for apartment"""
+    conn = get_connection()
+    try:
+        conn.execute("""
+            INSERT INTO user_promotion_progress (user_id, apartment_id, promotion_id, completed_bookings)
+            VALUES (?, ?, ?, 0)
+        """, (user_id, apartment_id, promotion_id))
+        conn.commit()
+    except sqlite3.IntegrityError:
+        # Already exists, just return it
+        pass
+    conn.close()
+    return get_user_promotion_progress(user_id, apartment_id)
+
+def update_promotion_progress(user_id: int, apartment_id: int, promotion_id: int,
+                              completed_bookings: int, cycle_number: int = None,
+                              last_booking_id: int = None, bonus_applied: bool = False):
+    """Update user's promotion progress"""
+    conn = get_connection()
+
+    if bonus_applied:
+        # Reset cycle after bonus is applied
+        conn.execute("""
+            UPDATE user_promotion_progress
+            SET completed_bookings = 0,
+                cycle_number = cycle_number + 1,
+                last_booking_id = ?,
+                bonus_applied_at = CURRENT_TIMESTAMP,
+                updated_at = CURRENT_TIMESTAMP
+            WHERE user_id = ? AND apartment_id = ? AND promotion_id = ?
+        """, (last_booking_id, user_id, apartment_id, promotion_id))
+    else:
+        # Just update progress
+        conn.execute("""
+            UPDATE user_promotion_progress
+            SET completed_bookings = ?,
+                last_booking_id = ?,
+                updated_at = CURRENT_TIMESTAMP
+            WHERE user_id = ? AND apartment_id = ? AND promotion_id = ?
+        """, (completed_bookings, last_booking_id, user_id, apartment_id, promotion_id))
+
+    conn.commit()
+    conn.close()
+
+def calculate_promotion_benefit(user_id: int, apartment_id: int, num_days: int):
+    """
+    Calculate if user gets promotion benefit and how many free days
+    Returns: (should_apply_bonus: bool, free_days: int, progress_info: dict)
+    """
+    # Get apartment with promotion
+    apartment = get_apartment_by_id(apartment_id)
+    if not apartment or not apartment.get('promotion_id'):
+        return False, 0, None
+
+    promotion_id = apartment['promotion_id']
+    promotion = get_promotion_by_id(promotion_id)
+
+    if not promotion or not promotion['is_active']:
+        return False, 0, None
+
+    # Get or create user progress
+    progress = get_user_promotion_progress(user_id, apartment_id)
+    if not progress:
+        # Initialize progress if it doesn't exist
+        progress = init_user_promotion_progress(user_id, apartment_id, promotion_id)
+
+    # Count completed bookings for this apartment (not in promotion_progress, but actual completed bookings)
+    conn = get_connection()
+    cursor = conn.execute("""
+        SELECT COUNT(*) as count
+        FROM bookings
+        WHERE user_id = ? AND apartment_id = ? AND status = 'completed'
+    """, (user_id, apartment_id))
+    completed_count = cursor.fetchone()['count']
+    conn.close()
+
+    # Current booking number in cycle
+    current_booking_num = progress['completed_bookings'] + 1
+
+    # Check if this booking qualifies for bonus
+    should_apply = current_booking_num >= promotion['bookings_required']
+    free_days = promotion['free_days'] if should_apply else 0
+
+    # Make sure free days don't exceed total days
+    if free_days > num_days:
+        free_days = num_days
+
+    progress_info = {
+        'current_booking_num': current_booking_num,
+        'bookings_required': promotion['bookings_required'],
+        'free_days_reward': promotion['free_days'],
+        'cycle_number': progress['cycle_number'],
+        'promotion_name': promotion['name'],
+        'promotion_description': promotion['description']
+    }
+
+    return should_apply, free_days, progress_info
+
+def apply_promotion_to_booking(booking_id: int, promotion_id: int, discount_days: int, original_price: float):
+    """Mark booking with promotion discount"""
+    conn = get_connection()
+    conn.execute("""
+        UPDATE bookings
+        SET promotion_id = ?,
+            promotion_discount_days = ?,
+            original_price = ?,
+            updated_at = CURRENT_TIMESTAMP
+        WHERE id = ?
+    """, (promotion_id, discount_days, original_price, booking_id))
+    conn.commit()
+    conn.close()
+
+def complete_booking_with_promotion(booking_id: int):
+    """
+    Complete booking and update promotion progress if applicable
+    This should be called when booking status changes to 'completed'
+    """
+    booking = get_booking_by_id(booking_id)
+    if not booking:
+        return
+
+    user_id = booking['user_id']
+    apartment_id = booking['apartment_id']
+
+    # Get apartment promotion
+    apartment = get_apartment_by_id(apartment_id)
+    if not apartment or not apartment.get('promotion_id'):
+        return
+
+    promotion_id = apartment['promotion_id']
+
+    # Get current progress
+    progress = get_user_promotion_progress(user_id, apartment_id)
+    if not progress:
+        progress = init_user_promotion_progress(user_id, apartment_id, promotion_id)
+
+    # Check if bonus was applied to this booking
+    bonus_was_applied = booking.get('promotion_discount_days', 0) > 0
+
+    if bonus_was_applied:
+        # Reset cycle
+        update_promotion_progress(
+            user_id, apartment_id, promotion_id,
+            completed_bookings=0,
+            last_booking_id=booking_id,
+            bonus_applied=True
+        )
+    else:
+        # Increment progress
+        new_count = progress['completed_bookings'] + 1
+        update_promotion_progress(
+            user_id, apartment_id, promotion_id,
+            completed_bookings=new_count,
+            last_booking_id=booking_id,
+            bonus_applied=False
+        )

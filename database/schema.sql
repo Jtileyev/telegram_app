@@ -36,6 +36,18 @@ CREATE TABLE IF NOT EXISTS districts (
     FOREIGN KEY (city_id) REFERENCES cities(id) ON DELETE CASCADE
 );
 
+-- Promotions table for managing promotional offers
+CREATE TABLE IF NOT EXISTS promotions (
+    id INTEGER PRIMARY KEY AUTOINCREMENT,
+    name TEXT NOT NULL,
+    description TEXT,
+    bookings_required INTEGER NOT NULL, -- Number of bookings required to get bonus (N)
+    free_days INTEGER NOT NULL, -- Number of free days given as bonus (X)
+    is_active BOOLEAN DEFAULT 1,
+    created_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP,
+    updated_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP
+);
+
 -- Apartments table (landlord_id now references users table)
 CREATE TABLE IF NOT EXISTS apartments (
     id INTEGER PRIMARY KEY AUTOINCREMENT,
@@ -51,7 +63,7 @@ CREATE TABLE IF NOT EXISTS apartments (
     price_per_month REAL,
     gis_link TEXT,
     amenities TEXT, -- JSON array
-    promotion TEXT, -- Promotion text if any
+    promotion_id INTEGER, -- Reference to promotions table
     rating REAL DEFAULT 0,
     reviews_count INTEGER DEFAULT 0,
     is_active BOOLEAN DEFAULT 1,
@@ -59,7 +71,8 @@ CREATE TABLE IF NOT EXISTS apartments (
     updated_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP,
     FOREIGN KEY (landlord_id) REFERENCES users(id) ON DELETE CASCADE,
     FOREIGN KEY (city_id) REFERENCES cities(id),
-    FOREIGN KEY (district_id) REFERENCES districts(id)
+    FOREIGN KEY (district_id) REFERENCES districts(id),
+    FOREIGN KEY (promotion_id) REFERENCES promotions(id) ON DELETE SET NULL
 );
 
 -- Apartment photos
@@ -84,11 +97,15 @@ CREATE TABLE IF NOT EXISTS bookings (
     total_price REAL NOT NULL,
     platform_fee REAL NOT NULL,
     status TEXT DEFAULT 'pending', -- pending, confirmed, completed, rejected, cancelled
+    promotion_id INTEGER, -- Applied promotion (if any)
+    promotion_discount_days INTEGER DEFAULT 0, -- Number of free days applied
+    original_price REAL, -- Original price before promotion discount
     created_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP,
     updated_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP,
     FOREIGN KEY (user_id) REFERENCES users(id),
     FOREIGN KEY (apartment_id) REFERENCES apartments(id),
-    FOREIGN KEY (landlord_id) REFERENCES users(id)
+    FOREIGN KEY (landlord_id) REFERENCES users(id),
+    FOREIGN KEY (promotion_id) REFERENCES promotions(id)
 );
 
 -- Favorites table
@@ -189,19 +206,44 @@ CREATE TABLE IF NOT EXISTS user_states (
     FOREIGN KEY (user_id) REFERENCES users(id) ON DELETE CASCADE
 );
 
+-- User promotion progress tracking
+CREATE TABLE IF NOT EXISTS user_promotion_progress (
+    id INTEGER PRIMARY KEY AUTOINCREMENT,
+    user_id INTEGER NOT NULL,
+    apartment_id INTEGER NOT NULL,
+    promotion_id INTEGER NOT NULL,
+    completed_bookings INTEGER DEFAULT 0, -- Number of completed bookings in current cycle
+    cycle_number INTEGER DEFAULT 1, -- Which cycle the user is on (resets after each bonus)
+    last_booking_id INTEGER, -- Last completed booking
+    bonus_applied_at TIMESTAMP, -- When the last bonus was applied
+    created_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP,
+    updated_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP,
+    FOREIGN KEY (user_id) REFERENCES users(id) ON DELETE CASCADE,
+    FOREIGN KEY (apartment_id) REFERENCES apartments(id) ON DELETE CASCADE,
+    FOREIGN KEY (promotion_id) REFERENCES promotions(id) ON DELETE CASCADE,
+    FOREIGN KEY (last_booking_id) REFERENCES bookings(id),
+    UNIQUE(user_id, apartment_id, promotion_id)
+);
+
 -- Indexes for better performance
 CREATE INDEX IF NOT EXISTS idx_users_telegram ON users(telegram_id);
 CREATE INDEX IF NOT EXISTS idx_users_email ON users(email);
 CREATE INDEX IF NOT EXISTS idx_apartments_city ON apartments(city_id);
 CREATE INDEX IF NOT EXISTS idx_apartments_district ON apartments(district_id);
 CREATE INDEX IF NOT EXISTS idx_apartments_landlord ON apartments(landlord_id);
+CREATE INDEX IF NOT EXISTS idx_apartments_promotion ON apartments(promotion_id);
 CREATE INDEX IF NOT EXISTS idx_bookings_user ON bookings(user_id);
 CREATE INDEX IF NOT EXISTS idx_bookings_apartment ON bookings(apartment_id);
 CREATE INDEX IF NOT EXISTS idx_bookings_status ON bookings(status);
+CREATE INDEX IF NOT EXISTS idx_bookings_promotion ON bookings(promotion_id);
 CREATE INDEX IF NOT EXISTS idx_favorites_user ON favorites(user_id);
 CREATE INDEX IF NOT EXISTS idx_reviews_apartment ON reviews(apartment_id);
 CREATE INDEX IF NOT EXISTS idx_messages_booking ON messages(booking_id);
 CREATE INDEX IF NOT EXISTS idx_translations_key ON translations(key);
+CREATE INDEX IF NOT EXISTS idx_promotions_active ON promotions(is_active);
+CREATE INDEX IF NOT EXISTS idx_user_promotion_progress_user ON user_promotion_progress(user_id);
+CREATE INDEX IF NOT EXISTS idx_user_promotion_progress_apartment ON user_promotion_progress(apartment_id);
+CREATE INDEX IF NOT EXISTS idx_user_promotion_progress_user_apartment ON user_promotion_progress(user_id, apartment_id);
 
 -- Insert default system settings (only settings, no cities/districts)
 INSERT OR IGNORE INTO settings (key, value, description) VALUES

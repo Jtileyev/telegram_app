@@ -28,7 +28,7 @@ if ($_SERVER['REQUEST_METHOD'] === 'POST') {
     $price_per_month = $_POST['price_per_month'] ?: null;
     $gis_link = $_POST['gis_link'];
     $amenities = json_encode($_POST['amenities'] ?? [], JSON_UNESCAPED_UNICODE);
-    $promotion = $_POST['promotion'];
+    $promotion_id = !empty($_POST['promotion_id']) ? (int)$_POST['promotion_id'] : null;
 
     if ($apartment) {
         // Update
@@ -37,7 +37,7 @@ if ($_SERVER['REQUEST_METHOD'] === 'POST') {
                 landlord_id = ?, city_id = ?, district_id = ?,
                 title_ru = ?, title_kk = ?, description_ru = ?, description_kk = ?,
                 address = ?, price_per_day = ?, price_per_month = ?,
-                gis_link = ?, amenities = ?, promotion = ?,
+                gis_link = ?, amenities = ?, promotion_id = ?,
                 updated_at = CURRENT_TIMESTAMP
             WHERE id = ?
         ");
@@ -45,7 +45,7 @@ if ($_SERVER['REQUEST_METHOD'] === 'POST') {
             $landlord_id, $city_id, $district_id,
             $title_ru, $title_kk, $description_ru, $description_kk,
             $address, $price_per_day, $price_per_month,
-            $gis_link, $amenities, $promotion,
+            $gis_link, $amenities, $promotion_id,
             $apartment['id']
         ]);
         $apt_id = $apartment['id'];
@@ -57,14 +57,14 @@ if ($_SERVER['REQUEST_METHOD'] === 'POST') {
                 landlord_id, city_id, district_id,
                 title_ru, title_kk, description_ru, description_kk,
                 address, price_per_day, price_per_month,
-                gis_link, amenities, promotion
+                gis_link, amenities, promotion_id
             ) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
         ");
         $stmt->execute([
             $landlord_id, $city_id, $district_id,
             $title_ru, $title_kk, $description_ru, $description_kk,
             $address, $price_per_day, $price_per_month,
-            $gis_link, $amenities, $promotion
+            $gis_link, $amenities, $promotion_id
         ]);
         $apt_id = $db->lastInsertId();
         setFlash('success', 'Квартира добавлена');
@@ -79,6 +79,7 @@ if ($_SERVER['REQUEST_METHOD'] === 'POST') {
 // Get data for dropdowns
 $landlords = $db->query("SELECT id, full_name, phone FROM users WHERE is_active = 1 AND roles LIKE '%landlord%' ORDER BY full_name")->fetchAll();
 $cities = $db->query("SELECT id, name_ru FROM cities ORDER BY name_ru")->fetchAll();
+$promotions = $db->query("SELECT id, name, bookings_required, free_days FROM promotions ORDER BY is_active DESC, name")->fetchAll();
 
 // Get amenities from database
 try {
@@ -192,10 +193,22 @@ include 'header.php';
                     </div>
 
                     <div class="mb-3">
-                        <label class="form-label">Акция</label>
-                        <input type="text" name="promotion" class="form-control"
-                               placeholder="Например: 6-ое заселение бесплатно"
-                               value="<?= $apartment ? sanitize($apartment['promotion']) : '' ?>">
+                        <label class="form-label">Программа лояльности (Акция)</label>
+                        <select name="promotion_id" class="form-select">
+                            <option value="">Без акции</option>
+                            <?php foreach ($promotions as $promo): ?>
+                            <option value="<?= $promo['id'] ?>"
+                                    <?= ($apartment && $apartment['promotion_id'] == $promo['id']) ? 'selected' : '' ?>>
+                                <?= sanitize($promo['name']) ?> (<?= $promo['bookings_required'] ?>-е заселение → <?= $promo['free_days'] ?> дней)
+                            </option>
+                            <?php endforeach; ?>
+                        </select>
+                        <small class="text-muted">
+                            Выберите акцию из списка.
+                            <?php if (isAdmin()): ?>
+                            <a href="promotions.php" target="_blank">Управление акциями</a>
+                            <?php endif; ?>
+                        </small>
                     </div>
 
                     <div class="mb-3">

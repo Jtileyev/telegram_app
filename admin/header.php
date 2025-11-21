@@ -86,6 +86,11 @@
                             </a>
                         </li>
                         <li class="nav-item">
+                            <a class="nav-link <?= in_array(basename($_SERVER['PHP_SELF']), ['promotions.php', 'promotion_edit.php']) ? 'active' : '' ?>" href="promotions.php">
+                                <i class="bi bi-gift me-2"></i>Акции
+                            </a>
+                        </li>
+                        <li class="nav-item">
                             <a class="nav-link <?= basename($_SERVER['PHP_SELF']) == 'requests.php' ? 'active' : '' ?>" href="requests.php">
                                 <i class="bi bi-envelope me-2"></i>Заявки
                             </a>
