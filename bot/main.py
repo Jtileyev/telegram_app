@@ -772,6 +772,9 @@ async def start_booking(callback: CallbackQuery, state: FSMContext):
 
 async def create_booking_request(message: Message, state: FSMContext, user: dict):
     """Create booking request"""
+    from notifications import notify_landlord_new_booking
+    import os
+
     data = await state.get_data()
     apartment_id = data.get('booking_apartment_id')
     filters = data.get('filters', {})
@@ -798,43 +801,86 @@ async def create_booking_request(message: Message, state: FSMContext, user: dict
     fee_percent = float(db.get_setting('platform_fee_percent') or 5)
     platform_fee = total_price * (fee_percent / 100)
 
-    # Create booking
-    booking_id = db.create_booking(
-        user['id'], apartment_id, apartment['landlord_id'],
-        filters['check_in'], filters['check_out'],
-        total_price, platform_fee
-    )
-
-    # Apply promotion discount if applicable
-    if should_apply_bonus and apartment.get('promotion_id'):
-        db.apply_promotion_to_booking(
-            booking_id,
-            apartment['promotion_id'],
-            discount_days,
-            original_total_price
+    # Create booking with validation
+    try:
+        booking_id = db.create_booking(
+            user['id'], apartment_id, apartment['landlord_id'],
+            filters['check_in'], filters['check_out'],
+            total_price, platform_fee
         )
 
-    # Send confirmation message
-    confirmation_text = get_text('booking_created', lang) + "\n\n"
-    confirmation_text += f"📅 {filters['check_in']} - {filters['check_out']}\n"
-    confirmation_text += f"💰 {get_text('total', lang)}: {format_price(total_price)} ₸\n"
+        # Apply promotion discount if applicable
+        if should_apply_bonus and apartment.get('promotion_id'):
+            db.apply_promotion_to_booking(
+                booking_id,
+                apartment['promotion_id'],
+                discount_days,
+                original_total_price
+            )
 
-    if should_apply_bonus:
-        confirmation_text += f"\n🎉 *{get_text('promotion_applied', lang)}*\n"
-        confirmation_text += f"🎁 -{discount_days} "
-        confirmation_text += "день" if discount_days == 1 else "дня" if discount_days < 5 else "дней"
-        confirmation_text += " бесплатно!\n"
-        confirmation_text += f"💵 Вы экономите: {format_price(original_total_price - total_price)} ₸\n"
+        # Send confirmation message
+        confirmation_text = get_text('booking_created', lang) + "\n\n"
+        confirmation_text += f"📅 {filters['check_in']} - {filters['check_out']}\n"
+        confirmation_text += f"💰 {get_text('total', lang)}: {format_price(total_price)} ₸\n"
 
-    await message.answer(
-        confirmation_text,
-        parse_mode="Markdown",
-        reply_markup=get_main_menu_keyboard(lang)
-    )
+        if should_apply_bonus:
+            confirmation_text += f"\n🎉 *{get_text('promotion_applied', lang)}*\n"
+            confirmation_text += f"🎁 -{discount_days} "
+            confirmation_text += "день" if discount_days == 1 else "дня" if discount_days < 5 else "дней"
+            confirmation_text += " бесплатно!\n"
+            confirmation_text += f"💵 Вы экономите: {format_price(original_total_price - total_price)} ₸\n"
 
-    # TODO: Notify landlord about new booking
+        await message.answer(
+            confirmation_text,
+            parse_mode="Markdown",
+            reply_markup=get_main_menu_keyboard(lang)
+        )
 
-    await state.clear()
+        # Notify landlord about new booking
+        try:
+            booking = db.get_booking_by_id(booking_id)
+            booking_info = {
+                'apartment_title': apartment.get('title_' + lang, apartment.get('title_ru', 'N/A')),
+                'user_name': user.get('full_name', 'N/A'),
+                'user_phone': user.get('phone', 'N/A'),
+                'check_in': filters['check_in'],
+                'check_out': filters['check_out'],
+                'total_price': total_price
+            }
+
+            bot_token = os.getenv('BOT_TOKEN') or db.get_setting('bot_token')
+            if booking and booking.get('landlord_telegram_id'):
+                notify_landlord_new_booking(
+                    booking['landlord_telegram_id'],
+                    booking_info,
+                    bot_token
+                )
+        except Exception as e:
+            print(f"Error notifying landlord: {e}")
+            # Не прерываем процесс, если уведомление не отправилось
+
+        await state.clear()
+
+    except ValueError as e:
+        # Обработка ошибок валидации
+        error_messages = {
+            "Check-in date cannot be in the past": "booking_past_dates",
+            "Check-out date must be after check-in date": "booking_invalid_dates",
+            "Minimum booking duration is 1 day": "booking_min_duration",
+            "User account is not active": "booking_user_inactive",
+            "Landlord account is not active": "booking_landlord_inactive",
+            "Apartment is not active": "booking_apartment_inactive",
+            "Apartment is already booked for selected dates": "apartment_booked"
+        }
+
+        error_key = error_messages.get(str(e), 'booking_error')
+        error_text = get_text(error_key, lang) if error_key in ['apartment_booked'] else str(e)
+
+        await message.answer(
+            error_text,
+            reply_markup=get_main_menu_keyboard(lang)
+        )
+        await state.clear()
 
 @router.message(BookingStates.waiting_contact, F.contact)
 async def process_contact(message: Message, state: FSMContext):
