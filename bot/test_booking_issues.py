@@ -38,30 +38,40 @@ class TestBookingIssues(unittest.TestCase):
 
     def setUp(self):
         """Set up test data before each test"""
-        # Create test users
-        self.user1_id = db.create_user(111111, "test_user1", "ru")
-        self.user2_id = db.create_user(222222, "test_user2", "ru")
-        self.landlord_id = db.create_user(333333, "test_landlord", "ru")
+        # Create test users - create_user returns user_id, but we need to get user by telegram_id
+        db.create_user(111111, "test_user1", "ru")
+        db.create_user(222222, "test_user2", "ru")
+        db.create_user(333333, "test_landlord", "ru")
 
-        # Update users with required data
-        db.update_user(self.user1_id, full_name="Test User 1", phone="+77771234567")
-        db.update_user(self.user2_id, full_name="Test User 2", phone="+77771234568")
-        db.update_user(self.landlord_id, full_name="Test Landlord", phone="+77771234569", is_landlord=True)
+        # Get user IDs from database
+        user1 = db.get_user(111111)
+        user2 = db.get_user(222222)
+        landlord = db.get_user(333333)
 
-        # Create test apartment
-        self.apartment_id = db.create_apartment(
-            landlord_id=self.landlord_id,
-            title="Test Apartment",
-            description="Test Description",
-            city="Almaty",
-            district="Medeu",
-            address="Test Street 1",
-            price_per_day=10000,
-            price_per_month=200000,
-            rooms=2,
-            floor=5,
-            area=50
-        )
+        self.user1_id = user1['id']
+        self.user2_id = user2['id']
+        self.landlord_id = landlord['id']
+
+        # Update users with required data (removed is_landlord - use roles instead)
+        db.update_user(111111, full_name="Test User 1", phone="+77771234567")
+        db.update_user(222222, full_name="Test User 2", phone="+77771234568")
+        db.update_user(333333, full_name="Test Landlord", phone="+77771234569")
+        db.add_role(self.landlord_id, 'landlord')
+
+        # Create test apartment using direct SQL (no create_apartment function exists)
+        conn = db.get_connection()
+        # First ensure we have city and district
+        conn.execute("INSERT OR IGNORE INTO cities (id, name_ru, name_kk) VALUES (1, 'Алматы', 'Алматы')")
+        conn.execute("INSERT OR IGNORE INTO districts (id, city_id, name_ru, name_kk) VALUES (1, 1, 'Медеу', 'Медеу')")
+        conn.execute("""
+            INSERT INTO apartments (landlord_id, city_id, district_id, title_ru, title_kk,
+                                   description_ru, description_kk, address, price_per_day, rooms, is_active)
+            VALUES (?, 1, 1, 'Test Apartment', 'Test Apartment', 'Test Description', 'Test Description',
+                    'Test Street 1', 10000, 2, 1)
+        """, (self.landlord_id,))
+        self.apartment_id = conn.execute("SELECT last_insert_rowid()").fetchone()[0]
+        conn.commit()
+        conn.close()
 
     def tearDown(self):
         """Clean up after each test"""
@@ -104,8 +114,8 @@ class TestBookingIssues(unittest.TestCase):
                     user_id=user_id,
                     apartment_id=self.apartment_id,
                     landlord_id=self.landlord_id,
-                    check_in_date=check_in.strftime('%Y-%m-%d'),
-                    check_out_date=check_out.strftime('%Y-%m-%d'),
+                    check_in=check_in.strftime('%Y-%m-%d'),
+                    check_out=check_out.strftime('%Y-%m-%d'),
                     total_price=20000,
                     platform_fee=1000
                 )
@@ -149,8 +159,8 @@ class TestBookingIssues(unittest.TestCase):
             user_id=self.user1_id,
             apartment_id=self.apartment_id,
             landlord_id=self.landlord_id,
-            check_in_date=past_check_in.strftime('%Y-%m-%d'),
-            check_out_date=past_check_out.strftime('%Y-%m-%d'),
+            check_in=past_check_in.strftime('%Y-%m-%d'),
+            check_out=past_check_out.strftime('%Y-%m-%d'),
             total_price=20000,
             platform_fee=1000
         )
@@ -212,8 +222,8 @@ class TestBookingIssues(unittest.TestCase):
             user_id=self.user1_id,
             apartment_id=self.apartment_id,
             landlord_id=self.landlord_id,
-            check_in_date=check_in.strftime('%Y-%m-%d'),
-            check_out_date=check_out.strftime('%Y-%m-%d'),
+            check_in=check_in.strftime('%Y-%m-%d'),
+            check_out=check_out.strftime('%Y-%m-%d'),
             total_price=20000,
             platform_fee=1000
         )
@@ -260,8 +270,8 @@ class TestBookingIssues(unittest.TestCase):
         check_in = datetime.now().date() + timedelta(days=1)
         check_out = datetime.now().date() + timedelta(days=4)  # 3 ночи
 
-        # Получаем цену квартиры
-        apartment = db.get_apartment(self.apartment_id)
+        # Получаем цену квартиры (fixed: use get_apartment_by_id instead of get_apartment)
+        apartment = db.get_apartment_by_id(self.apartment_id)
         price_per_day = apartment['price_per_day']
 
         # Рассчитываем ожидаемую цену
@@ -277,14 +287,14 @@ class TestBookingIssues(unittest.TestCase):
             user_id=self.user1_id,
             apartment_id=self.apartment_id,
             landlord_id=self.landlord_id,
-            check_in_date=check_in.strftime('%Y-%m-%d'),
-            check_out_date=check_out.strftime('%Y-%m-%d'),
+            check_in=check_in.strftime('%Y-%m-%d'),
+            check_out=check_out.strftime('%Y-%m-%d'),
             total_price=expected_total,
             platform_fee=expected_fee
         )
 
-        # Получаем бронирование из БД
-        booking = db.get_booking(booking_id)
+        # Получаем бронирование из БД (fixed: use get_booking_by_id instead of get_booking)
+        booking = db.get_booking_by_id(booking_id)
 
         print(f"\n✓ PRICE CALCULATION TEST:")
         print(f"   Дней: {days}")
@@ -307,8 +317,8 @@ class TestBookingIssues(unittest.TestCase):
             user_id=self.user1_id,
             apartment_id=self.apartment_id,
             landlord_id=self.landlord_id,
-            check_in_date=(datetime.now() + timedelta(days=5)).date().strftime('%Y-%m-%d'),
-            check_out_date=(datetime.now() + timedelta(days=10)).date().strftime('%Y-%m-%d'),
+            check_in=(datetime.now() + timedelta(days=5)).date().strftime('%Y-%m-%d'),
+            check_out=(datetime.now() + timedelta(days=10)).date().strftime('%Y-%m-%d'),
             total_price=50000,
             platform_fee=2500
         )
@@ -382,8 +392,8 @@ class TestBookingIssues(unittest.TestCase):
             user_id=self.user1_id,
             apartment_id=self.apartment_id,
             landlord_id=self.landlord_id,
-            check_in_date=check_in.strftime('%Y-%m-%d'),
-            check_out_date=check_in.strftime('%Y-%m-%d'),  # Та же дата!
+            check_in=check_in.strftime('%Y-%m-%d'),
+            check_out=check_in.strftime('%Y-%m-%d'),  # Та же дата!
             total_price=0,
             platform_fee=0
         )
@@ -412,8 +422,8 @@ class TestBookingIssues(unittest.TestCase):
             user_id=self.user1_id,
             apartment_id=self.apartment_id,
             landlord_id=self.landlord_id,
-            check_in_date=check_in.strftime('%Y-%m-%d'),
-            check_out_date=check_out.strftime('%Y-%m-%d'),
+            check_in=check_in.strftime('%Y-%m-%d'),
+            check_out=check_out.strftime('%Y-%m-%d'),
             total_price=20000,
             platform_fee=1000
         )
@@ -422,8 +432,8 @@ class TestBookingIssues(unittest.TestCase):
             user_id=self.user2_id,
             apartment_id=self.apartment_id,
             landlord_id=self.landlord_id,
-            check_in_date=check_in.strftime('%Y-%m-%d'),
-            check_out_date=check_out.strftime('%Y-%m-%d'),
+            check_in=check_in.strftime('%Y-%m-%d'),
+            check_out=check_out.strftime('%Y-%m-%d'),
             total_price=20000,
             platform_fee=1000
         )
@@ -462,25 +472,31 @@ class TestBookingEdgeCases(unittest.TestCase):
 
     def setUp(self):
         """Set up test data"""
-        self.user_id = db.create_user(444444, "edge_user", "ru")
-        self.landlord_id = db.create_user(555555, "edge_landlord", "ru")
+        db.create_user(444444, "edge_user", "ru")
+        db.create_user(555555, "edge_landlord", "ru")
 
-        db.update_user(self.user_id, full_name="Edge User", phone="+77771111111")
-        db.update_user(self.landlord_id, full_name="Edge Landlord", phone="+77772222222", is_landlord=True)
+        user = db.get_user(444444)
+        landlord = db.get_user(555555)
 
-        self.apartment_id = db.create_apartment(
-            landlord_id=self.landlord_id,
-            title="Edge Apartment",
-            description="Test",
-            city="Almaty",
-            district="Medeu",
-            address="Test St",
-            price_per_day=5000,
-            price_per_month=100000,
-            rooms=1,
-            floor=1,
-            area=30
-        )
+        self.user_id = user['id']
+        self.landlord_id = landlord['id']
+
+        db.update_user(444444, full_name="Edge User", phone="+77771111111")
+        db.update_user(555555, full_name="Edge Landlord", phone="+77772222222")
+        db.add_role(self.landlord_id, 'landlord')
+
+        # Create test apartment using direct SQL
+        conn = db.get_connection()
+        conn.execute("INSERT OR IGNORE INTO cities (id, name_ru, name_kk) VALUES (1, 'Алматы', 'Алматы')")
+        conn.execute("INSERT OR IGNORE INTO districts (id, city_id, name_ru, name_kk) VALUES (1, 1, 'Медеу', 'Медеу')")
+        conn.execute("""
+            INSERT INTO apartments (landlord_id, city_id, district_id, title_ru, title_kk,
+                                   description_ru, description_kk, address, price_per_day, rooms, is_active)
+            VALUES (?, 1, 1, 'Edge Apartment', 'Edge Apartment', 'Test', 'Test', 'Test St', 5000, 1, 1)
+        """, (self.landlord_id,))
+        self.apartment_id = conn.execute("SELECT last_insert_rowid()").fetchone()[0]
+        conn.commit()
+        conn.close()
 
     def tearDown(self):
         """Clean up"""
@@ -500,8 +516,8 @@ class TestBookingEdgeCases(unittest.TestCase):
             user_id=self.user_id,
             apartment_id=self.apartment_id,
             landlord_id=self.landlord_id,
-            check_in_date=check_in.strftime('%Y-%m-%d'),
-            check_out_date=check_out.strftime('%Y-%m-%d'),
+            check_in=check_in.strftime('%Y-%m-%d'),
+            check_out=check_out.strftime('%Y-%m-%d'),
             total_price=2000000,
             platform_fee=100000
         )
@@ -520,8 +536,8 @@ class TestBookingEdgeCases(unittest.TestCase):
             user_id=self.user_id,
             apartment_id=self.apartment_id,
             landlord_id=self.landlord_id,
-            check_in_date=check_in.strftime('%Y-%m-%d'),
-            check_out_date=check_out.strftime('%Y-%m-%d'),
+            check_in=check_in.strftime('%Y-%m-%d'),
+            check_out=check_out.strftime('%Y-%m-%d'),
             total_price=25000,
             platform_fee=1250
         )

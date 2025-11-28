@@ -2,10 +2,23 @@ import sqlite3
 import json
 from datetime import datetime, date
 from pathlib import Path
+from enum import Enum
+from typing import Optional, List, Dict, Any
+
+from constants import MIN_RATING, MAX_RATING, MIN_REVIEW_COMMENT_LENGTH, MAX_REVIEW_COMMENT_LENGTH
 
 DB_PATH = Path(__file__).parent.parent / 'database' / 'rental.db'
 
-def get_connection():
+
+class BookingStatus(Enum):
+    """Enum for booking statuses to avoid magic strings"""
+    PENDING = 'pending'
+    CONFIRMED = 'confirmed'
+    COMPLETED = 'completed'
+    REJECTED = 'rejected'
+    CANCELLED = 'cancelled'
+
+def get_connection() -> sqlite3.Connection:
     """Get database connection"""
     conn = sqlite3.connect(str(DB_PATH))
     conn.row_factory = sqlite3.Row
@@ -28,7 +41,7 @@ def init_db():
     print("✓ Database schema initialized")
 
 # User operations
-def get_user(telegram_id: int):
+def get_user(telegram_id: int) -> Optional[Dict[str, Any]]:
     """Get user by telegram ID"""
     conn = get_connection()
     cursor = conn.execute(
@@ -39,7 +52,7 @@ def get_user(telegram_id: int):
     conn.close()
     return dict(user) if user else None
 
-def create_user(telegram_id: int, username: str = None, lang: str = 'ru'):
+def create_user(telegram_id: int, username: str = None, lang: str = 'ru') -> int:
     """Create new user"""
     conn = get_connection()
     conn.execute(
@@ -51,8 +64,18 @@ def create_user(telegram_id: int, username: str = None, lang: str = 'ru'):
     conn.close()
     return user_id
 
+ALLOWED_USER_FIELDS = {'full_name', 'phone', 'language', 'is_active', 'username', 'roles'}
+
 def update_user(telegram_id: int, **kwargs):
-    """Update user data"""
+    """Update user data with field validation to prevent SQL injection"""
+    # Validate fields against whitelist
+    invalid_fields = set(kwargs.keys()) - ALLOWED_USER_FIELDS
+    if invalid_fields:
+        raise ValueError(f"Invalid fields: {invalid_fields}")
+
+    if not kwargs:
+        return
+
     conn = get_connection()
     updates = ', '.join([f"{k} = ?" for k in kwargs.keys()])
     values = list(kwargs.values()) + [telegram_id]
@@ -173,7 +196,7 @@ def clear_user_state(user_id: int):
     conn.close()
 
 # City and district operations
-def get_cities():
+def get_cities() -> List[Dict[str, Any]]:
     """Get all cities"""
     conn = get_connection()
     cursor = conn.execute("SELECT * FROM cities ORDER BY name_ru")
@@ -181,7 +204,7 @@ def get_cities():
     conn.close()
     return cities
 
-def get_districts(city_id: int):
+def get_districts(city_id: int) -> List[Dict[str, Any]]:
     """Get districts by city"""
     conn = get_connection()
     cursor = conn.execute(
@@ -192,7 +215,7 @@ def get_districts(city_id: int):
     conn.close()
     return districts
 
-def get_city_by_id(city_id: int):
+def get_city_by_id(city_id: int) -> Optional[Dict[str, Any]]:
     """Get city by ID"""
     conn = get_connection()
     cursor = conn.execute("SELECT * FROM cities WHERE id = ?", (city_id,))
@@ -200,7 +223,7 @@ def get_city_by_id(city_id: int):
     conn.close()
     return dict(city) if city else None
 
-def get_district_by_id(district_id: int):
+def get_district_by_id(district_id: int) -> Optional[Dict[str, Any]]:
     """Get district by ID"""
     conn = get_connection()
     cursor = conn.execute("SELECT * FROM districts WHERE id = ?", (district_id,))
@@ -209,8 +232,8 @@ def get_district_by_id(district_id: int):
     return dict(district) if district else None
 
 # Apartment operations
-def get_apartments(city_id: int = None, district_id: int = None):
-    """Get available apartments with filters"""
+def get_apartments(city_id: int = None, district_id: int = None) -> List[Dict[str, Any]]:
+    """Get available apartments with filters (optimized to avoid N+1 queries)"""
     conn = get_connection()
 
     query = """
@@ -237,16 +260,44 @@ def get_apartments(city_id: int = None, district_id: int = None):
 
     cursor = conn.execute(query, params)
     apartments = [dict(row) for row in cursor.fetchall()]
+
+    if not apartments:
+        conn.close()
+        return apartments
+
+    # Batch load photos for all apartments (fix N+1 query problem)
+    apartment_ids = [apt['id'] for apt in apartments]
+    placeholders = ','.join('?' * len(apartment_ids))
+    photos_cursor = conn.execute(
+        f"""SELECT apartment_id, photo_path
+            FROM apartment_photos
+            WHERE apartment_id IN ({placeholders})
+            ORDER BY apartment_id, is_main DESC, sort_order""",
+        apartment_ids
+    )
+
+    # Group photos by apartment_id
+    photos_by_apt = {}
+    project_root = Path(__file__).parent.parent
+    for row in photos_cursor.fetchall():
+        apt_id = row['apartment_id']
+        photo_path = row['photo_path']
+        if not Path(photo_path).is_absolute():
+            photo_path = str(project_root / photo_path)
+        if apt_id not in photos_by_apt:
+            photos_by_apt[apt_id] = []
+        photos_by_apt[apt_id].append(photo_path)
+
     conn.close()
 
-    # Get photos for each apartment
+    # Assign photos and parse amenities
     for apt in apartments:
-        apt['photos'] = get_apartment_photos(apt['id'])
+        apt['photos'] = photos_by_apt.get(apt['id'], [])
         apt['amenities'] = json.loads(apt['amenities']) if apt['amenities'] else []
 
     return apartments
 
-def get_apartment_by_id(apartment_id: int):
+def get_apartment_by_id(apartment_id: int) -> Optional[Dict[str, Any]]:
     """Get apartment by ID"""
     conn = get_connection()
     cursor = conn.execute("""
@@ -273,7 +324,7 @@ def get_apartment_by_id(apartment_id: int):
         apt['amenities'] = json.loads(apt['amenities']) if apt['amenities'] else []
     return apt
 
-def get_apartment_photos(apartment_id: int):
+def get_apartment_photos(apartment_id: int) -> List[str]:
     """Get photos for apartment"""
     conn = get_connection()
     cursor = conn.execute(
@@ -293,7 +344,7 @@ def get_apartment_photos(apartment_id: int):
 
 # Booking operations
 def create_booking(user_id: int, apartment_id: int, landlord_id: int,
-                   check_in: str, check_out: str, total_price: float, platform_fee: float):
+                   check_in: str, check_out: str, total_price: float, platform_fee: float) -> int:
     """Create new booking with validation"""
     from datetime import datetime as dt, date as dt_date
 
@@ -381,7 +432,7 @@ def create_booking(user_id: int, apartment_id: int, landlord_id: int,
         conn.close()
         raise
 
-def get_user_bookings(user_id: int):
+def get_user_bookings(user_id: int) -> List[Dict[str, Any]]:
     """Get user's booking history"""
     conn = get_connection()
     cursor = conn.execute("""
@@ -397,7 +448,7 @@ def get_user_bookings(user_id: int):
     conn.close()
     return bookings
 
-def get_booking_by_id(booking_id: int):
+def get_booking_by_id(booking_id: int) -> Optional[Dict[str, Any]]:
     """Get booking by ID"""
     conn = get_connection()
     cursor = conn.execute("""
@@ -430,12 +481,13 @@ def update_booking_status(booking_id: int, status: str):
         complete_booking_with_promotion(booking_id)
 
 def check_apartment_availability(apartment_id: int, check_in: str, check_out: str):
-    """Check if apartment is available for given dates (only confirmed bookings block dates)"""
+    """Check if apartment is available for given dates (confirmed and completed bookings block dates)"""
     conn = get_connection()
+    # Synchronized with create_booking() - both check 'confirmed' AND 'completed' statuses
     cursor = conn.execute("""
         SELECT COUNT(*) as count FROM bookings
         WHERE apartment_id = ?
-        AND status = 'confirmed'
+        AND status IN ('confirmed', 'completed')
         AND (
             (check_in_date <= ? AND check_out_date > ?)
             OR (check_in_date < ? AND check_out_date >= ?)
@@ -447,14 +499,15 @@ def check_apartment_availability(apartment_id: int, check_in: str, check_out: st
     return count == 0
 
 def get_booked_dates(apartment_id: int):
-    """Get all booked dates for apartment (only confirmed bookings)"""
+    """Get all booked dates for apartment (confirmed and completed bookings)"""
     from datetime import datetime, timedelta
 
     conn = get_connection()
+    # Synchronized with check_apartment_availability() and create_booking()
     cursor = conn.execute("""
         SELECT check_in_date, check_out_date
         FROM bookings
-        WHERE apartment_id = ? AND status = 'confirmed'
+        WHERE apartment_id = ? AND status IN ('confirmed', 'completed')
     """, (apartment_id,))
 
     booked_dates = set()
@@ -496,7 +549,7 @@ def remove_from_favorites(user_id: int, apartment_id: int):
     conn.commit()
     conn.close()
 
-def get_user_favorites(user_id: int):
+def get_user_favorites(user_id: int) -> List[Dict[str, Any]]:
     """Get user's favorite apartments"""
     conn = get_connection()
     cursor = conn.execute("""
@@ -520,7 +573,7 @@ def get_user_favorites(user_id: int):
 
     return apartments
 
-def is_favorite(user_id: int, apartment_id: int):
+def is_favorite(user_id: int, apartment_id: int) -> bool:
     """Check if apartment is in user's favorites"""
     conn = get_connection()
     cursor = conn.execute(
@@ -532,7 +585,7 @@ def is_favorite(user_id: int, apartment_id: int):
     return result
 
 # Review operations
-def get_apartment_reviews(apartment_id: int, limit: int = 10, offset: int = 0):
+def get_apartment_reviews(apartment_id: int, limit: int = 10, offset: int = 0) -> List[Dict[str, Any]]:
     """Get reviews for apartment"""
     conn = get_connection()
     cursor = conn.execute("""
@@ -548,8 +601,25 @@ def get_apartment_reviews(apartment_id: int, limit: int = 10, offset: int = 0):
     return reviews
 
 def create_review(user_id: int, apartment_id: int, booking_id: int,
-                  rating: int, comment: str = None, **criteria):
-    """Create new review"""
+                  rating: int, comment: str = None, **criteria) -> None:
+    """Create new review with input validation"""
+    # Validate rating is in range MIN_RATING to MAX_RATING
+    if not isinstance(rating, int) or rating < MIN_RATING or rating > MAX_RATING:
+        raise ValueError(f"Rating must be an integer between {MIN_RATING} and {MAX_RATING}")
+
+    # Validate comment length if provided
+    if comment is not None:
+        if len(comment) < MIN_REVIEW_COMMENT_LENGTH:
+            raise ValueError(f"Comment must be at least {MIN_REVIEW_COMMENT_LENGTH} characters long")
+        if len(comment) > MAX_REVIEW_COMMENT_LENGTH:
+            raise ValueError(f"Comment must not exceed {MAX_REVIEW_COMMENT_LENGTH} characters")
+
+    # Validate criteria ratings if provided
+    for key in ['cleanliness', 'accuracy', 'communication', 'location']:
+        value = criteria.get(key)
+        if value is not None and (not isinstance(value, int) or value < MIN_RATING or value > MAX_RATING):
+            raise ValueError(f"{key} rating must be an integer between {MIN_RATING} and {MAX_RATING}")
+
     conn = get_connection()
     conn.execute("""
         INSERT INTO reviews (user_id, apartment_id, booking_id, rating, comment,
@@ -573,7 +643,7 @@ def create_review(user_id: int, apartment_id: int, booking_id: int,
     conn.commit()
     conn.close()
 
-def can_leave_review(user_id: int, booking_id: int):
+def can_leave_review(user_id: int, booking_id: int) -> bool:
     """Check if user can leave review for booking"""
     conn = get_connection()
     # Check if booking is completed and no review exists
@@ -678,7 +748,7 @@ def set_setting(key: str, value: str):
     conn.close()
 
 # Promotion operations
-def get_promotions(active_only: bool = False):
+def get_promotions(active_only: bool = False) -> List[Dict[str, Any]]:
     """Get all promotions"""
     conn = get_connection()
     query = "SELECT * FROM promotions"
@@ -690,7 +760,7 @@ def get_promotions(active_only: bool = False):
     conn.close()
     return promotions
 
-def get_promotion_by_id(promotion_id: int):
+def get_promotion_by_id(promotion_id: int) -> Optional[Dict[str, Any]]:
     """Get promotion by ID"""
     conn = get_connection()
     cursor = conn.execute("SELECT * FROM promotions WHERE id = ?", (promotion_id,))
@@ -698,7 +768,7 @@ def get_promotion_by_id(promotion_id: int):
     conn.close()
     return dict(promotion) if promotion else None
 
-def create_promotion(name: str, description: str, bookings_required: int, free_days: int, is_active: bool = True):
+def create_promotion(name: str, description: str, bookings_required: int, free_days: int, is_active: bool = True) -> int:
     """Create new promotion"""
     conn = get_connection()
     conn.execute("""
@@ -710,8 +780,18 @@ def create_promotion(name: str, description: str, bookings_required: int, free_d
     conn.close()
     return promotion_id
 
+ALLOWED_PROMOTION_FIELDS = {'name', 'description', 'bookings_required', 'free_days', 'is_active'}
+
 def update_promotion(promotion_id: int, **kwargs):
-    """Update promotion data"""
+    """Update promotion data with field validation to prevent SQL injection"""
+    # Validate fields against whitelist
+    invalid_fields = set(kwargs.keys()) - ALLOWED_PROMOTION_FIELDS
+    if invalid_fields:
+        raise ValueError(f"Invalid fields: {invalid_fields}")
+
+    if not kwargs:
+        return
+
     conn = get_connection()
     updates = ', '.join([f"{k} = ?" for k in kwargs.keys()])
     values = list(kwargs.values()) + [promotion_id]
@@ -730,7 +810,7 @@ def delete_promotion(promotion_id: int):
     conn.close()
 
 # User promotion progress operations
-def get_user_promotion_progress(user_id: int, apartment_id: int):
+def get_user_promotion_progress(user_id: int, apartment_id: int) -> Optional[Dict[str, Any]]:
     """Get user's promotion progress for specific apartment"""
     conn = get_connection()
     cursor = conn.execute("""

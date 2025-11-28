@@ -111,20 +111,42 @@ def get_audit_logger():
     return audit_logger
 
 
+def mask_sensitive_data(text: str) -> str:
+    """Mask sensitive data like phone numbers and emails in log messages"""
+    import re
+    if not text:
+        return text
+
+    # Mask phone numbers (various formats)
+    # +7 XXX XXX XX XX -> +7 XXX ***
+    text = re.sub(r'(\+?\d{1,2}[\s\-]?\(?\d{3}\)?[\s\-]?)\d{3}[\s\-]?\d{2}[\s\-]?\d{2}',
+                  r'\1***-**-**', text)
+
+    # Mask email addresses
+    # user@domain.com -> u***@domain.com
+    text = re.sub(r'([a-zA-Z0-9])[a-zA-Z0-9._%+-]*@([a-zA-Z0-9.-]+\.[a-zA-Z]{2,})',
+                  r'\1***@\2', text)
+
+    return text
+
+
 # Helper functions for structured logging
 def log_user_action(logger, user_id: int, action: str, details: str = None):
-    """Log user action"""
+    """Log user action with sensitive data masking"""
     msg = f"User {user_id} - {action}"
     if details:
-        msg += f" - {details}"
+        # Mask sensitive data before logging
+        masked_details = mask_sensitive_data(details)
+        msg += f" - {masked_details}"
     logger.info(msg)
 
 
 def log_booking_action(audit_logger, user_id: int, booking_id: int, action: str, details: str = None):
-    """Log booking-related action to audit log"""
+    """Log booking-related action to audit log with sensitive data masking"""
     msg = f"Booking {booking_id} - User {user_id} - {action}"
     if details:
-        msg += f" - {details}"
+        masked_details = mask_sensitive_data(details)
+        msg += f" - {masked_details}"
     audit_logger.info(msg)
 
 

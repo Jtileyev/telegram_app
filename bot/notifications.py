@@ -5,6 +5,13 @@ Sends notifications to users and landlords via Telegram
 import asyncio
 from aiogram import Bot
 
+from constants import PRICE_THOUSANDS_SEPARATOR, PRICE_CURRENCY
+
+
+def format_price(price: float) -> str:
+    """Format price with thousands separator (unified formatting)"""
+    return "{:,.0f}".format(price).replace(',', PRICE_THOUSANDS_SEPARATOR)
+
 
 async def send_notification(telegram_id: int, message: str, bot_token: str):
     """Send notification to user via Telegram"""
@@ -62,7 +69,7 @@ async def notify_landlord_new_booking(
 
 📅 Заезд: {check_in}
 📅 Выезд: {check_out}
-💰 Сумма: {total_price:,.0f} ₸
+💰 Сумма: {format_price(total_price)} {PRICE_CURRENCY}
 
 Бронирование #{booking_id}
 

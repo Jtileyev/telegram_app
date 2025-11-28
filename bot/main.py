@@ -15,6 +15,10 @@ from locales import get_text
 from logger import setup_logger, get_audit_logger, log_user_action, log_booking_action, log_error
 from rate_limiter import default_rate_limiter
 from notifications import notify_landlord_new_booking
+from constants import (
+    MAX_PHOTOS_PER_MESSAGE, REVIEWS_PER_PAGE, BOOKINGS_HISTORY_LIMIT,
+    PRICE_THOUSANDS_SEPARATOR, PRICE_CURRENCY
+)
 
 # Configure logging with new centralized system
 logger = setup_logger('telegram_bot')
@@ -77,7 +81,7 @@ def validate_phone(phone: str) -> bool:
 
 def format_price(price: float) -> str:
     """Format price with thousands separator"""
-    return "{:,.0f}".format(price).replace(',', ' ')
+    return "{:,.0f}".format(price).replace(',', PRICE_THOUSANDS_SEPARATOR)
 
 def format_apartment_card(apartment: dict, lang: str = 'ru', user_id: int = None) -> str:
     """Format apartment information as text"""
@@ -137,7 +141,7 @@ async def send_apartment_card(message: Message, apartment: dict, keyboard, lang:
         try:
             # Send photos with caption as media group
             media_group = []
-            for i, photo_path in enumerate(photos[:10]):  # Telegram limit: 10 photos max
+            for i, photo_path in enumerate(photos[:MAX_PHOTOS_PER_MESSAGE]):
                 photo = FSInputFile(photo_path)
                 if i == 0:
                     # First photo gets the caption
@@ -312,7 +316,7 @@ async def handle_history(message: Message, state: FSMContext):
 
     await message.answer(get_text('history_title', lang))
 
-    for booking in bookings[:10]:  # Show last 10
+    for booking in bookings[:BOOKINGS_HISTORY_LIMIT]:
         status_key = f"status_{booking['status']}"
         title = booking['title_ru'] if lang == 'ru' else booking['title_kk']
 
@@ -855,13 +859,11 @@ async def create_booking_request(message: Message, state: FSMContext, user: dict
 
         # Notify landlord about new booking
         try:
-            # Get landlord telegram_id from database
-            landlord_data = db.get_connection().execute(
-                "SELECT telegram_id, full_name FROM users WHERE id = ?",
-                (apartment['landlord_id'],)
-            ).fetchone()
+            # Get landlord telegram_id from apartment data (already loaded)
+            landlord_telegram_id = apartment.get('landlord_telegram_id')
+            landlord_name = apartment.get('landlord_name')
 
-            if landlord_data and landlord_data['telegram_id']:
+            if landlord_telegram_id:
                 apartment_title = apartment['title_ru'] if lang == 'ru' else apartment['title_kk']
 
                 # Import config to get bot token
@@ -870,7 +872,7 @@ async def create_booking_request(message: Message, state: FSMContext, user: dict
 
                 # Send notification to landlord
                 await notify_landlord_new_booking(
-                    landlord_telegram_id=landlord_data['telegram_id'],
+                    landlord_telegram_id=landlord_telegram_id,
                     booking_id=booking_id,
                     apartment_title=apartment_title,
                     guest_name=user['full_name'],
@@ -880,7 +882,7 @@ async def create_booking_request(message: Message, state: FSMContext, user: dict
                     total_price=total_price,
                     bot_token=bot_token
                 )
-                logger.info(f"Sent new booking notification to landlord {landlord_data['telegram_id']}")
+                logger.info(f"Sent new booking notification to landlord {landlord_telegram_id}")
         except Exception as e:
             # Don't fail the booking if notification fails
             log_error(logger, e, "notify_landlord_new_booking")
@@ -947,7 +949,7 @@ async def show_reviews(callback: CallbackQuery, state: FSMContext):
     telegram_id = callback.from_user.id
     lang = db.get_user_language(telegram_id)
 
-    reviews = db.get_apartment_reviews(apartment_id, limit=5)
+    reviews = db.get_apartment_reviews(apartment_id, limit=REVIEWS_PER_PAGE)
 
     if not reviews:
         await callback.answer(get_text('no_reviews', lang), show_alert=True)
@@ -1210,11 +1212,8 @@ async def confirm_cancel_booking(callback: CallbackQuery):
     telegram_id = callback.from_user.id
     lang = db.get_user_language(telegram_id)
 
-    # Update booking status to cancelled
-    conn = db.get_connection()
-    conn.execute("UPDATE bookings SET status = 'cancelled' WHERE id = ?", (booking_id,))
-    conn.commit()
-    conn.close()
+    # Update booking status to cancelled using database abstraction
+    db.update_booking_status(booking_id, 'cancelled')
 
     await callback.message.edit_text(get_text('booking_cancelled', lang))
     await callback.answer()
@@ -1232,9 +1231,21 @@ async def keep_booking(callback: CallbackQuery):
 @router.callback_query(F.data.startswith("rating_"))
 async def select_rating(callback: CallbackQuery, state: FSMContext):
     """Select review rating"""
-    rating = int(callback.data.split("_")[1])
     telegram_id = callback.from_user.id
-    lang = db.get_user_language(telegram_id)
+    user = db.get_user(telegram_id)
+    lang = user['language']
+
+    # Get booking_id from state data
+    data = await state.get_data()
+    booking_id = data.get('review_booking_id')
+
+    # Verify user can leave review for this booking
+    if booking_id and not db.can_leave_review(user['id'], booking_id):
+        await callback.answer(get_text('cannot_leave_review', lang), show_alert=True)
+        await state.clear()
+        return
+
+    rating = int(callback.data.split("_")[1])
 
     await state.update_data(rating=rating)
     await callback.message.edit_text(get_text('rating_selected', lang, rating=rating))
@@ -1276,9 +1287,8 @@ async def reviews_pagination(callback: CallbackQuery):
     lang = db.get_user_language(telegram_id)
 
     # Get reviews for page
-    reviews_per_page = 5
-    offset = (page - 1) * reviews_per_page
-    reviews = db.get_apartment_reviews(apartment_id, limit=reviews_per_page, offset=offset)
+    offset = (page - 1) * REVIEWS_PER_PAGE
+    reviews = db.get_apartment_reviews(apartment_id, limit=REVIEWS_PER_PAGE, offset=offset)
 
     if reviews:
         text = get_text('reviews_title', lang) + "\n\n"
@@ -1293,7 +1303,7 @@ async def reviews_pagination(callback: CallbackQuery):
         conn = db.get_connection()
         total = conn.execute("SELECT COUNT(*) FROM reviews WHERE apartment_id = ?", (apartment_id,)).fetchone()[0]
         conn.close()
-        total_pages = (total + reviews_per_page - 1) // reviews_per_page
+        total_pages = (total + REVIEWS_PER_PAGE - 1) // REVIEWS_PER_PAGE
 
         await callback.message.edit_text(
             text,
@@ -1331,10 +1341,11 @@ async def keep_favorite(callback: CallbackQuery):
 
 # Main function
 async def main():
-    """Start bot"""
+    """Start bot with graceful shutdown support"""
     global bot
 
     import config
+    import signal
 
     # Initialize database
     db.init_db()
@@ -1351,14 +1362,39 @@ async def main():
     # Register rate limiting middleware
     dp.message.middleware(default_rate_limiter)
     dp.callback_query.middleware(default_rate_limiter)
-    logger.info("Rate limiting middleware enabled (10 req/min, burst 20)")
+    logger.info("Rate limiting middleware enabled")
 
     # Include router
     dp.include_router(router)
 
+    # Graceful shutdown handler
+    async def shutdown():
+        """Cleanup on shutdown"""
+        logger.info("Shutting down bot...")
+        await dp.stop_polling()
+        if bot:
+            await bot.session.close()
+        logger.info("Bot stopped gracefully")
+
+    # Setup signal handlers for graceful shutdown
+    loop = asyncio.get_event_loop()
+
+    def signal_handler(sig):
+        logger.info(f"Received signal {sig}, initiating shutdown...")
+        asyncio.create_task(shutdown())
+
+    for sig in (signal.SIGTERM, signal.SIGINT):
+        loop.add_signal_handler(sig, lambda s=sig: signal_handler(s))
+
     # Start polling
     logger.info("Starting bot...")
-    await dp.start_polling(bot)
+    try:
+        await dp.start_polling(bot)
+    finally:
+        # Ensure cleanup on exit
+        if bot and bot.session:
+            await bot.session.close()
+        logger.info("Bot shutdown complete")
 
 if __name__ == "__main__":
     asyncio.run(main())

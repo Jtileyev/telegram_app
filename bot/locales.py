@@ -185,6 +185,16 @@ MESSAGES = {
         'day_names': ['Пн', 'Вт', 'Ср', 'Чт', 'Пт', 'Сб', 'Вс'],
         'prev_month': '◀️',
         'next_month': '▶️',
+
+        # Missing keys
+        'feature_coming_soon': '🚧 Эта функция скоро будет доступна',
+        'booking_kept': '✅ Бронирование сохранено',
+        'rating_selected': '⭐ Вы выбрали оценку: {rating}',
+        'enter_review_comment': '📝 Напишите ваш отзыв:',
+        'marked_helpful': '👍 Спасибо за отзыв!',
+        'marked_not_helpful': '👎 Спасибо за отзыв!',
+        'kept_in_favorites': '⭐ Квартира осталась в избранном',
+        'confirm_cancel_booking': '❓ Вы уверены, что хотите отменить бронирование?',
     },
 
     'kk': {
@@ -371,6 +381,16 @@ MESSAGES = {
         'day_names': ['Дс', 'Сс', 'Ср', 'Бс', 'Жм', 'Сб', 'Жс'],
         'prev_month': '◀️',
         'next_month': '▶️',
+
+        # Missing keys
+        'feature_coming_soon': '🚧 Бұл функция жақында қолжетімді болады',
+        'booking_kept': '✅ Броньдау сақталды',
+        'rating_selected': '⭐ Сіз бағаны таңдадыңыз: {rating}',
+        'enter_review_comment': '📝 Пікіріңізді жазыңыз:',
+        'marked_helpful': '👍 Пікіріңізге рахмет!',
+        'marked_not_helpful': '👎 Пікіріңізге рахмет!',
+        'kept_in_favorites': '⭐ Пәтер таңдаулыларда қалды',
+        'confirm_cancel_booking': '❓ Броньдауды болдырмағыңыз келетініне сенімдісіз бе?',
     }
 }
 

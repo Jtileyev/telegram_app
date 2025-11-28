@@ -9,6 +9,12 @@ from datetime import datetime, timedelta
 from collections import defaultdict
 import asyncio
 
+from constants import (
+    RATE_LIMIT_REQUESTS, RATE_LIMIT_PERIOD, RATE_LIMIT_BURST,
+    RATE_LIMIT_WARNING_COOLDOWN, RATE_LIMIT_CLEANUP_INTERVAL,
+    RATE_LIMIT_CLEANUP_THRESHOLD_HOURS
+)
+
 
 class RateLimiter(BaseMiddleware):
     """
@@ -19,9 +25,9 @@ class RateLimiter(BaseMiddleware):
 
     def __init__(
         self,
-        rate_limit: int = 10,  # requests per period
-        period: int = 60,  # period in seconds
-        burst_limit: int = 20,  # max burst
+        rate_limit: int = RATE_LIMIT_REQUESTS,
+        period: int = RATE_LIMIT_PERIOD,
+        burst_limit: int = RATE_LIMIT_BURST,
     ):
         """
         Initialize rate limiter
@@ -45,8 +51,8 @@ class RateLimiter(BaseMiddleware):
         # Statistics
         self.stats = defaultdict(int)
 
-        # Start cleanup task
-        asyncio.create_task(self._cleanup_task())
+        # Cleanup task will be started when middleware is first used
+        self._cleanup_task_started = False
 
     async def __call__(
         self,
@@ -65,6 +71,11 @@ class RateLimiter(BaseMiddleware):
         Returns:
             Result from next handler or None if rate limited
         """
+        # Start cleanup task on first call (when event loop is running)
+        if not self._cleanup_task_started:
+            self._cleanup_task_started = True
+            asyncio.create_task(self._cleanup_task())
+
         user_id = event.from_user.id
 
         # Check if user is allowed
@@ -131,10 +142,10 @@ class RateLimiter(BaseMiddleware):
         """
         now = datetime.now()
 
-        # Check if we already warned this user recently (last 5 minutes)
+        # Check if we already warned this user recently
         if user_id in self.throttled_users:
             last_warning = self.throttled_users[user_id]
-            if (now - last_warning).total_seconds() < 300:  # 5 minutes
+            if (now - last_warning).total_seconds() < RATE_LIMIT_WARNING_COOLDOWN:
                 # Don't send another warning
                 return
 
@@ -160,10 +171,9 @@ class RateLimiter(BaseMiddleware):
     async def _cleanup_task(self):
         """
         Periodic cleanup task to remove old entries
-        Runs every 5 minutes
         """
         while True:
-            await asyncio.sleep(300)  # 5 minutes
+            await asyncio.sleep(RATE_LIMIT_CLEANUP_INTERVAL)
             await self._cleanup()
 
     async def _cleanup(self):
@@ -171,7 +181,7 @@ class RateLimiter(BaseMiddleware):
         Remove old entries from buckets and throttled users
         """
         now = datetime.now()
-        cleanup_threshold = timedelta(hours=1)
+        cleanup_threshold = timedelta(hours=RATE_LIMIT_CLEANUP_THRESHOLD_HOURS)
 
         # Clean up buckets
         old_users = [
@@ -218,9 +228,8 @@ class RateLimiter(BaseMiddleware):
 
 
 # Create default rate limiter instance
-# 10 requests per minute, with burst up to 20
 default_rate_limiter = RateLimiter(
-    rate_limit=10,
-    period=60,
-    burst_limit=20
+    rate_limit=RATE_LIMIT_REQUESTS,
+    period=RATE_LIMIT_PERIOD,
+    burst_limit=RATE_LIMIT_BURST
 )
