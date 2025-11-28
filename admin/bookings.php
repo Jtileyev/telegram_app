@@ -9,9 +9,57 @@ $db = getDB();
 // Handle status update
 if (isset($_POST['update_status'])) {
     $booking_id = $_POST['booking_id'];
-    $status = $_POST['status'];
+    $new_status = $_POST['status'];
+
+    // Get current booking status and details for notification
+    $stmt = $db->prepare("
+        SELECT b.status as old_status, b.user_id, b.check_in_date, b.check_out_date,
+               a.title_ru, a.address,
+               landlord.full_name as landlord_name, landlord.phone as landlord_phone,
+               renter.language as user_language
+        FROM bookings b
+        JOIN apartments a ON b.apartment_id = a.id
+        JOIN users landlord ON b.landlord_id = landlord.id
+        JOIN users renter ON b.user_id = renter.id
+        WHERE b.id = ?
+    ");
+    $stmt->execute([$booking_id]);
+    $booking_info = $stmt->fetch();
+
+    // Update booking status
     $stmt = $db->prepare("UPDATE bookings SET status = ?, updated_at = CURRENT_TIMESTAMP WHERE id = ?");
-    $stmt->execute([$status, $booking_id]);
+    $stmt->execute([$new_status, $booking_id]);
+
+    // Create notification if status changed to a notifiable status
+    if ($booking_info && $booking_info['old_status'] !== $new_status) {
+        $notifiable_statuses = ['confirmed', 'rejected', 'completed', 'cancelled'];
+        if (in_array($new_status, $notifiable_statuses)) {
+            $lang = $booking_info['user_language'] ?: 'ru';
+
+            // Build notification message based on status and language
+            $notification_data = json_encode([
+                'status' => $new_status,
+                'apartment_title' => $booking_info['title_ru'],
+                'address' => $booking_info['address'],
+                'check_in' => formatDate($booking_info['check_in_date']),
+                'check_out' => formatDate($booking_info['check_out_date']),
+                'landlord_name' => $booking_info['landlord_name'],
+                'landlord_phone' => $booking_info['landlord_phone'],
+                'lang' => $lang
+            ], JSON_UNESCAPED_UNICODE);
+
+            $stmt = $db->prepare("
+                INSERT INTO notifications (user_id, type, message, is_sent, scheduled_at)
+                VALUES (?, ?, ?, 0, NULL)
+            ");
+            $stmt->execute([
+                $booking_info['user_id'],
+                'booking_status_' . $new_status,
+                $notification_data
+            ]);
+        }
+    }
+
     setFlash('success', 'Статус обновлен');
     header('Location: bookings.php');
     exit;

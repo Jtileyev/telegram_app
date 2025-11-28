@@ -16,7 +16,7 @@ from dotenv import load_dotenv
 # Load environment variables
 load_dotenv()
 
-DB_PATH = Path(__file__).parent / 'database' / 'rental.db'
+DB_PATH = Path(__file__).parent / 'rental.db'
 
 def generate_password(length=12):
     """Generate a random password"""
@@ -276,7 +276,7 @@ def main():
     # Apply migrations
     print("\n6. Applying database migrations...")
     try:
-        from database.migrate import apply_migrations
+        from migrate import apply_migrations
         apply_migrations()
     except Exception as e:
         print(f"   ⚠️  Migration warning: {e}")

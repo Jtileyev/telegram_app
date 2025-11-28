@@ -48,7 +48,10 @@ astavaisya/
 │
 ├── database/                     # База данных
 │   ├── schema.sql                # SQL схема
-│   └── rental.db                 # SQLite файл БД
+│   ├── rental.db                 # SQLite файл БД
+│   ├── init_database.py          # Инициализация БД
+│   ├── reset_database.py         # Сброс БД
+│   └── apply_promotions_migration.py  # Миграция акций
 │
 ├── uploads/                      # Загруженные файлы
 │   └── apartments/               # Фотографии квартир
@@ -60,13 +63,15 @@ astavaisya/
 │
 ├── tasks/                        # Задачи по рефакторингу
 │
+├── scripts/                      # Служебные скрипты
+│   ├── backup.sh                 # Резервное копирование
+│   ├── restore.sh                # Восстановление из бэкапа
+│   └── run_all_tests.sh          # Запуск всех тестов
+│
 ├── .env.example                  # Пример переменных окружения
 ├── requirements.txt              # Python зависимости
-├── init_database.py              # Инициализация БД
 ├── start.sh                      # Скрипт запуска бота
-├── stop.sh                       # Скрипт остановки бота
-├── backup.sh                     # Резервное копирование
-└── restore.sh                    # Восстановление из бэкапа
+└── stop.sh                       # Скрипт остановки бота
 ```
 
 ## 🔧 Архитектура
@@ -175,7 +180,7 @@ LOG_LEVEL=INFO
 ### 3. Инициализация базы данных
 
 ```bash
-python init_database.py
+python database/init_database.py
 ```
 
 ### 4. Запуск бота
@@ -241,10 +246,10 @@ cd admin && php -S localhost:8080
 
 ```bash
 # Создать бэкап
-./backup.sh
+./scripts/backup.sh
 
 # Восстановить из бэкапа
-./restore.sh backups/backup_2024-01-15.tar.gz
+./scripts/restore.sh backup_20240115_120000
 ```
 
 ## 🌍 Локализация

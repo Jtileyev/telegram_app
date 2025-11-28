@@ -171,6 +171,37 @@ MESSAGES = {
         'btn_contact_support': 'Связаться с поддержкой',
 
         # Notifications
+        'notification_booking_confirmed': '''✅ Ваше бронирование подтверждено!
+
+🏠 {apartment_title}
+📍 {address}
+📅 Заезд: {check_in}
+📅 Выезд: {check_out}
+
+📞 Контакт арендодателя: {landlord_phone}
+👤 {landlord_name}
+
+Приятного проживания!''',
+        'notification_booking_rejected': '''❌ К сожалению, ваше бронирование отклонено.
+
+🏠 {apartment_title}
+📍 {address}
+📅 Даты: {check_in} - {check_out}
+
+Попробуйте выбрать другую квартиру или даты.''',
+        'notification_booking_completed': '''✅ Бронирование завершено!
+
+🏠 {apartment_title}
+📍 {address}
+📅 Даты: {check_in} - {check_out}
+
+Спасибо, что воспользовались нашим сервисом!
+Пожалуйста, оставьте отзыв о квартире.''',
+        'notification_booking_cancelled': '''🚫 Бронирование отменено.
+
+🏠 {apartment_title}
+📍 {address}
+📅 Даты: {check_in} - {check_out}''',
         'reminder_check_in': '''⏰ Напоминание!
 
 Завтра у вас заселение в квартиру:
@@ -195,6 +226,37 @@ MESSAGES = {
         'marked_not_helpful': '👎 Спасибо за отзыв!',
         'kept_in_favorites': '⭐ Квартира осталась в избранном',
         'confirm_cancel_booking': '❓ Вы уверены, что хотите отменить бронирование?',
+
+        # Landlord reply
+        'landlord_reply': '💬 Ответ арендодателя:',
+
+        # Detailed ratings
+        'rate_cleanliness': '🧹 Оцените чистоту:',
+        'rate_accuracy': '📝 Насколько описание соответствовало реальности?',
+        'rate_communication': '💬 Оцените общение с арендодателем:',
+        'rate_location': '📍 Оцените расположение:',
+        'btn_skip_details': '⏭ Пропустить детали',
+        'detailed_ratings': '🧹 {cleanliness} | 📝 {accuracy} | 💬 {communication} | 📍 {location}',
+
+        # Messaging
+        'enter_message': '✏️ Введите сообщение:',
+        'message_sent': '✅ Сообщение отправлено',
+        'no_messages': '📭 Нет сообщений',
+        'new_message_notification': '''💬 Новое сообщение!
+
+От: {sender_name}
+Бронирование: {apartment_title}
+
+{message}''',
+        'messages_history': '💬 История сообщений',
+        'btn_reply': '↩️ Ответить',
+
+        # Review additional texts
+        'btn_skip_comment': '⏭ Пропустить',
+        'review_prompt': '📝 Пожалуйста, оставьте отзыв о квартире',
+        'already_reviewed': '✅ Вы уже оставили отзыв для этого бронирования',
+        'cannot_leave_review': '❌ Вы не можете оставить отзыв для этого бронирования',
+        'review_submitted': '✅ Спасибо за ваш отзыв!',
 
         # Actions and validation
         'actions_prompt': '👇 Действия:',
@@ -379,6 +441,37 @@ MESSAGES = {
         'btn_contact_support': 'Қолдау қызметіне хабарласу',
 
         # Notifications
+        'notification_booking_confirmed': '''✅ Сіздің броньдауыңыз расталды!
+
+🏠 {apartment_title}
+📍 {address}
+📅 Кіру: {check_in}
+📅 Шығу: {check_out}
+
+📞 Жалға берушінің байланысы: {landlord_phone}
+👤 {landlord_name}
+
+Жағымды тұруыңызды тілейміз!''',
+        'notification_booking_rejected': '''❌ Өкінішке орай, сіздің броньдауыңыз қабылданбады.
+
+🏠 {apartment_title}
+📍 {address}
+📅 Күндер: {check_in} - {check_out}
+
+Басқа пәтер немесе күндерді таңдап көріңіз.''',
+        'notification_booking_completed': '''✅ Броньдау аяқталды!
+
+🏠 {apartment_title}
+📍 {address}
+📅 Күндер: {check_in} - {check_out}
+
+Біздің қызметті пайдаланғаныңызға рахмет!
+Пәтер туралы пікір қалдырыңыз.''',
+        'notification_booking_cancelled': '''🚫 Броньдау болдырылмады.
+
+🏠 {apartment_title}
+📍 {address}
+📅 Күндер: {check_in} - {check_out}''',
         'reminder_check_in': '''⏰ Еске салу!
 
 Ертең сіздің пәтерге кіруіңіз:
@@ -403,6 +496,37 @@ MESSAGES = {
         'marked_not_helpful': '👎 Пікіріңізге рахмет!',
         'kept_in_favorites': '⭐ Пәтер таңдаулыларда қалды',
         'confirm_cancel_booking': '❓ Броньдауды болдырмағыңыз келетініне сенімдісіз бе?',
+
+        # Landlord reply
+        'landlord_reply': '💬 Жалға берушінің жауабы:',
+
+        # Detailed ratings
+        'rate_cleanliness': '🧹 Тазалықты бағалаңыз:',
+        'rate_accuracy': '📝 Сипаттама шындыққа қаншалықты сәйкес келді?',
+        'rate_communication': '💬 Жалға берушімен қарым-қатынасты бағалаңыз:',
+        'rate_location': '📍 Орналасуды бағалаңыз:',
+        'btn_skip_details': '⏭ Мәліметтерді өткізіп жіберу',
+        'detailed_ratings': '🧹 {cleanliness} | 📝 {accuracy} | 💬 {communication} | 📍 {location}',
+
+        # Messaging
+        'enter_message': '✏️ Хабарламаңызды жазыңыз:',
+        'message_sent': '✅ Хабарлама жіберілді',
+        'no_messages': '📭 Хабарламалар жоқ',
+        'new_message_notification': '''💬 Жаңа хабарлама!
+
+Кімнен: {sender_name}
+Броньдау: {apartment_title}
+
+{message}''',
+        'messages_history': '💬 Хабарламалар тарихы',
+        'btn_reply': '↩️ Жауап беру',
+
+        # Review additional texts
+        'btn_skip_comment': '⏭ Өткізіп жіберу',
+        'review_prompt': '📝 Пәтер туралы пікір қалдырыңыз',
+        'already_reviewed': '✅ Сіз бұл броньдау үшін пікір қалдырдыңыз',
+        'cannot_leave_review': '❌ Сіз бұл броньдау үшін пікір қалдыра алмайсыз',
+        'review_submitted': '✅ Пікіріңізге рахмет!',
 
         # Actions and validation
         'actions_prompt': '👇 Әрекеттер:',

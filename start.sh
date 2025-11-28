@@ -12,11 +12,14 @@ PROJECT_DIR="$SCRIPT_DIR"
 
 cd "$PROJECT_DIR" || exit 1
 
+# Создание папки логов если не существует
+mkdir -p logs
+
 echo -e "${BLUE}Запуск админки и бота...${NC}"
 
 # Запуск PHP админки в фоне
 echo -e "${GREEN}Запуск PHP админки на localhost:8080...${NC}"
-php -S localhost:8080 -t . > admin.log 2>&1 &
+php -S localhost:8080 -t . > logs/admin.log 2>&1 &
 PHP_PID=$!
 echo "PHP сервер запущен (PID: $PHP_PID)"
 
@@ -25,7 +28,7 @@ sleep 1
 
 # Запуск Python бота
 echo -e "${GREEN}Запуск Telegram бота...${NC}"
-venv/bin/python3 bot/main.py > bot.log 2>&1 &
+venv/bin/python3 bot/main.py > logs/bot_stdout.log 2>&1 &
 BOT_PID=$!
 echo "Бот запущен (PID: $BOT_PID)"
 
@@ -35,8 +38,8 @@ echo "$BOT_PID" > .bot.pid
 
 echo -e "${BLUE}================================${NC}"
 echo -e "${GREEN}Админка: http://localhost:8080${NC}"
-echo -e "${GREEN}Логи админки: admin.log${NC}"
-echo -e "${GREEN}Логи бота: bot.log${NC}"
+echo -e "${GREEN}Логи админки: logs/admin.log${NC}"
+echo -e "${GREEN}Логи бота: logs/bot.log${NC}"
 echo -e "${BLUE}================================${NC}"
 echo -e "Для остановки используйте: ./stop.sh"
-echo -e "Для просмотра логов: tail -f admin.log или tail -f bot.log"
+echo -e "Для просмотра логов: tail -f logs/admin.log или tail -f logs/bot.log"

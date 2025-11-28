@@ -954,3 +954,76 @@ def complete_booking_with_promotion(booking_id: int):
             last_booking_id=booking_id,
             bonus_applied=False
         )
+
+
+# Notifications queue operations
+def create_notification(user_id: int, notification_type: str, message: str, scheduled_at: str = None) -> int:
+    """Create notification in queue"""
+    with get_db() as conn:
+        conn.execute("""
+            INSERT INTO notifications (user_id, type, message, scheduled_at)
+            VALUES (?, ?, ?, ?)
+        """, (user_id, notification_type, message, scheduled_at))
+        conn.commit()
+        notification_id = conn.execute("SELECT last_insert_rowid()").fetchone()[0]
+        return notification_id
+
+def get_pending_notifications(limit: int = 50) -> List[Dict[str, Any]]:
+    """Get unsent notifications that are ready to be sent"""
+    with get_db() as conn:
+        cursor = conn.execute("""
+            SELECT n.*, u.telegram_id, u.language
+            FROM notifications n
+            JOIN users u ON n.user_id = u.id
+            WHERE n.is_sent = 0
+              AND (n.scheduled_at IS NULL OR n.scheduled_at <= CURRENT_TIMESTAMP)
+            ORDER BY n.created_at ASC
+            LIMIT ?
+        """, (limit,))
+        return [dict(row) for row in cursor.fetchall()]
+
+def mark_notification_sent(notification_id: int):
+    """Mark notification as sent"""
+    with get_db() as conn:
+        conn.execute("""
+            UPDATE notifications
+            SET is_sent = 1, sent_at = CURRENT_TIMESTAMP
+            WHERE id = ?
+        """, (notification_id,))
+        conn.commit()
+
+def get_user_by_id(user_id: int) -> Optional[Dict[str, Any]]:
+    """Get user by internal ID"""
+    with get_db() as conn:
+        cursor = conn.execute("SELECT * FROM users WHERE id = ?", (user_id,))
+        user = cursor.fetchone()
+        return dict(user) if user else None
+
+
+# Reminder operations
+def get_bookings_for_reminder(hours_before: int = 24) -> List[Dict[str, Any]]:
+    """Get confirmed bookings that need check-in reminder"""
+    with get_db() as conn:
+        cursor = conn.execute("""
+            SELECT b.id, b.check_in_date, b.user_id,
+                   a.title_ru, a.title_kk, a.address,
+                   landlord.full_name as landlord_name, landlord.phone as landlord_phone,
+                   renter.telegram_id, renter.language
+            FROM bookings b
+            JOIN apartments a ON b.apartment_id = a.id
+            JOIN users landlord ON b.landlord_id = landlord.id
+            JOIN users renter ON b.user_id = renter.id
+            WHERE b.status = 'confirmed'
+              AND b.reminder_sent = 0
+              AND date(b.check_in_date) = date('now', '+' || ? || ' hours')
+        """, (hours_before,))
+        return [dict(row) for row in cursor.fetchall()]
+
+def mark_reminder_sent(booking_id: int):
+    """Mark booking reminder as sent"""
+    with get_db() as conn:
+        conn.execute(
+            "UPDATE bookings SET reminder_sent = 1 WHERE id = ?",
+            (booking_id,)
+        )
+        conn.commit()

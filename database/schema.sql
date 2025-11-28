@@ -100,6 +100,7 @@ CREATE TABLE IF NOT EXISTS bookings (
     promotion_id INTEGER, -- Applied promotion (if any)
     promotion_discount_days INTEGER DEFAULT 0, -- Number of free days applied
     original_price REAL, -- Original price before promotion discount
+    reminder_sent BOOLEAN DEFAULT 0, -- Check-in reminder sent flag
     created_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP,
     updated_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP,
     FOREIGN KEY (user_id) REFERENCES users(id),

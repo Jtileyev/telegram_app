@@ -14,6 +14,11 @@ NC='\033[0m' # No Color
 
 TOTAL_FAILURES=0
 
+# Get project directory
+SCRIPT_DIR="$(cd "$(dirname "${BASH_SOURCE[0]}")" && pwd)"
+PROJECT_DIR="$(dirname "$SCRIPT_DIR")"
+cd "$PROJECT_DIR"
+
 # Test 1: Basic database and validation tests
 echo -e "${YELLOW}[1/3] Running Basic Tests (Database, Localization, Validation)${NC}"
 echo "────────────────────────────────────────────────────────────"

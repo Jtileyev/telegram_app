@@ -19,7 +19,10 @@ from handlers import (
     landlords_router,
     common_router,
     calendar_router,
+    messages_router,
 )
+from notification_worker import notification_worker_loop
+from reminder_scheduler import reminder_scheduler_loop
 
 logger = setup_logger('telegram_bot')
 
@@ -61,6 +64,7 @@ async def main():
     dp.include_router(reviews_router)
     dp.include_router(favorites_router)
     dp.include_router(landlords_router)
+    dp.include_router(messages_router)
     dp.include_router(common_router)
 
     # Graceful shutdown handler
@@ -82,11 +86,29 @@ async def main():
     for sig in (signal.SIGTERM, signal.SIGINT):
         loop.add_signal_handler(sig, lambda s=sig: signal_handler(s))
 
+    # Start notification worker as background task
+    notification_task = asyncio.create_task(notification_worker_loop(bot, interval=10))
+    logger.info("Notification worker started")
+
+    # Start reminder scheduler as background task (checks every hour)
+    reminder_task = asyncio.create_task(reminder_scheduler_loop(bot, interval=3600))
+    logger.info("Reminder scheduler started")
+
     # Start polling
     logger.info("Starting bot...")
     try:
         await dp.start_polling(bot)
     finally:
+        notification_task.cancel()
+        reminder_task.cancel()
+        try:
+            await notification_task
+        except asyncio.CancelledError:
+            pass
+        try:
+            await reminder_task
+        except asyncio.CancelledError:
+            pass
         if bot and bot.session:
             await bot.session.close()
         logger.info("Bot shutdown complete")

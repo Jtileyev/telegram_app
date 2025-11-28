@@ -7,8 +7,8 @@ import sqlite3
 import os
 from pathlib import Path
 
-DB_PATH = Path(__file__).parent / 'database' / 'rental.db'
-SCHEMA_PATH = Path(__file__).parent / 'database' / 'schema.sql'
+DB_PATH = Path(__file__).parent / 'rental.db'
+SCHEMA_PATH = Path(__file__).parent / 'schema.sql'
 
 def main():
     print("="*60)

@@ -12,7 +12,7 @@ This script will:
 import sqlite3
 from pathlib import Path
 
-DB_PATH = Path(__file__).parent / 'database' / 'rental.db'
+DB_PATH = Path(__file__).parent / 'rental.db'
 
 def apply_migration():
     """Apply promotions migration to database"""

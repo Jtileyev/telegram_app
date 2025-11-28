@@ -367,3 +367,56 @@ def get_confirm_remove_favorite_keyboard(apartment_id: int, lang: str = 'ru'):
         ]
     ]
     return InlineKeyboardMarkup(inline_keyboard=buttons)
+
+
+def get_booking_history_keyboard(booking_id: int, can_review: bool, lang: str = 'ru'):
+    """Booking history item keyboard with review button"""
+    buttons = []
+    if can_review:
+        buttons.append([InlineKeyboardButton(
+            text=get_text('btn_leave_review', lang),
+            callback_data=f"start_review_{booking_id}"
+        )])
+    return InlineKeyboardMarkup(inline_keyboard=buttons) if buttons else None
+
+
+def get_skip_comment_keyboard(lang: str = 'ru'):
+    """Skip comment keyboard for reviews"""
+    buttons = [[
+        InlineKeyboardButton(
+            text=get_text('btn_skip_comment', lang),
+            callback_data="skip_review_comment"
+        )
+    ]]
+    return InlineKeyboardMarkup(inline_keyboard=buttons)
+
+
+def get_detailed_rating_keyboard(rating_type: str, lang: str = 'ru'):
+    """Rating keyboard for detailed criteria with skip option"""
+    buttons = [
+        [
+            InlineKeyboardButton(text="1", callback_data=f"detail_{rating_type}_1"),
+            InlineKeyboardButton(text="2", callback_data=f"detail_{rating_type}_2"),
+            InlineKeyboardButton(text="3", callback_data=f"detail_{rating_type}_3"),
+            InlineKeyboardButton(text="4", callback_data=f"detail_{rating_type}_4"),
+            InlineKeyboardButton(text="5", callback_data=f"detail_{rating_type}_5"),
+        ],
+        [
+            InlineKeyboardButton(
+                text=get_text('btn_skip_details', lang),
+                callback_data="skip_detailed_ratings"
+            )
+        ]
+    ]
+    return InlineKeyboardMarkup(inline_keyboard=buttons)
+
+
+def get_message_reply_keyboard(booking_id: int, lang: str = 'ru'):
+    """Reply to message keyboard"""
+    buttons = [[
+        InlineKeyboardButton(
+            text=get_text('btn_reply', lang),
+            callback_data=f"chat_{booking_id}"
+        )
+    ]]
+    return InlineKeyboardMarkup(inline_keyboard=buttons)

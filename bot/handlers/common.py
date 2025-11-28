@@ -20,10 +20,12 @@ router = Router()
 
 # History handler
 @router.message(F.text.in_([
-    "📋 История", "📋 Тарих"
+    "📋 История аренды", "📋 Жалдау тарихы"
 ]))
 async def handle_history(message: Message, state: FSMContext):
     """Handle history button"""
+    from keyboards import get_booking_history_keyboard
+
     telegram_id = message.from_user.id
     user = db.get_user(telegram_id)
     lang = user['language']
@@ -46,7 +48,14 @@ async def handle_history(message: Message, state: FSMContext):
         text += f"💰 {format_price(booking['total_price'])} ₸\n"
         text += f"{get_text(status_key, lang)}"
 
-        await message.answer(text, parse_mode="Markdown")
+        # Check if user can leave review for completed bookings
+        can_review = booking['status'] == 'completed' and db.can_leave_review(user['id'], booking['id'])
+
+        await message.answer(
+            text,
+            parse_mode="Markdown",
+            reply_markup=get_booking_history_keyboard(booking['id'], can_review, lang) if can_review else None
+        )
 
 
 # Language change handler

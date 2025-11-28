@@ -10,6 +10,7 @@ from .favorites import router as favorites_router
 from .landlords import router as landlords_router
 from .common import router as common_router
 from .calendar import router as calendar_router
+from .messages import router as messages_router
 
 __all__ = [
     'registration_router',
@@ -20,4 +21,5 @@ __all__ = [
     'landlords_router',
     'common_router',
     'calendar_router',
+    'messages_router',
 ]

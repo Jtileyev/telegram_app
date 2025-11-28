@@ -29,7 +29,7 @@ source venv/bin/activate
 pip install -r requirements.txt
 
 # Initialize database
-python init_database.py
+python database/init_database.py
 
 # Start bot
 ./start.sh
@@ -50,13 +50,13 @@ cd admin && php -S localhost:8080
 ### Database
 ```bash
 # Reset database
-python reset_database.py
+python database/reset_database.py
 
 # Backup
-./backup.sh
+./scripts/backup.sh
 
 # Restore
-./restore.sh backups/backup_YYYY-MM-DD.tar.gz
+./scripts/restore.sh backup_YYYYMMDD_HHMMSS
 ```
 
 ## Environment Variables
