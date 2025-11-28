@@ -1,5 +1,6 @@
 import sqlite3
 import json
+from contextlib import contextmanager
 from datetime import datetime, date
 from pathlib import Path
 from enum import Enum
@@ -24,6 +25,16 @@ def get_connection() -> sqlite3.Connection:
     conn.row_factory = sqlite3.Row
     return conn
 
+
+@contextmanager
+def get_db():
+    """Context manager for database connections to prevent leaks"""
+    conn = get_connection()
+    try:
+        yield conn
+    finally:
+        conn.close()
+
 def init_db():
     """Initialize database with schema"""
     schema_path = Path(__file__).parent.parent / 'database' / 'schema.sql'
@@ -43,26 +54,24 @@ def init_db():
 # User operations
 def get_user(telegram_id: int) -> Optional[Dict[str, Any]]:
     """Get user by telegram ID"""
-    conn = get_connection()
-    cursor = conn.execute(
-        "SELECT * FROM users WHERE telegram_id = ?",
-        (telegram_id,)
-    )
-    user = cursor.fetchone()
-    conn.close()
-    return dict(user) if user else None
+    with get_db() as conn:
+        cursor = conn.execute(
+            "SELECT * FROM users WHERE telegram_id = ?",
+            (telegram_id,)
+        )
+        user = cursor.fetchone()
+        return dict(user) if user else None
 
 def create_user(telegram_id: int, username: str = None, lang: str = 'ru') -> int:
     """Create new user"""
-    conn = get_connection()
-    conn.execute(
-        "INSERT INTO users (telegram_id, username, language, roles) VALUES (?, ?, ?, ?)",
-        (telegram_id, username, lang, json.dumps(['user']))
-    )
-    conn.commit()
-    user_id = conn.execute("SELECT last_insert_rowid()").fetchone()[0]
-    conn.close()
-    return user_id
+    with get_db() as conn:
+        conn.execute(
+            "INSERT INTO users (telegram_id, username, language, roles) VALUES (?, ?, ?, ?)",
+            (telegram_id, username, lang, json.dumps(['user']))
+        )
+        conn.commit()
+        user_id = conn.execute("SELECT last_insert_rowid()").fetchone()[0]
+        return user_id
 
 ALLOWED_USER_FIELDS = {'full_name', 'phone', 'language', 'is_active', 'username', 'roles'}
 
@@ -76,160 +85,150 @@ def update_user(telegram_id: int, **kwargs):
     if not kwargs:
         return
 
-    conn = get_connection()
-    updates = ', '.join([f"{k} = ?" for k in kwargs.keys()])
-    values = list(kwargs.values()) + [telegram_id]
-    conn.execute(
-        f"UPDATE users SET {updates}, updated_at = CURRENT_TIMESTAMP WHERE telegram_id = ?",
-        values
-    )
-    conn.commit()
-    conn.close()
+    with get_db() as conn:
+        updates = ', '.join([f"{k} = ?" for k in kwargs.keys()])
+        values = list(kwargs.values()) + [telegram_id]
+        conn.execute(
+            f"UPDATE users SET {updates}, updated_at = CURRENT_TIMESTAMP WHERE telegram_id = ?",
+            values
+        )
+        conn.commit()
 
 def get_user_language(telegram_id: int) -> str:
     """Get user's preferred language"""
-    user = get_user(telegram_id)
-    return user['language'] if user else 'ru'
+    with get_db() as conn:
+        cursor = conn.execute(
+            "SELECT language FROM users WHERE telegram_id = ?",
+            (telegram_id,)
+        )
+        row = cursor.fetchone()
+        return row['language'] if row else 'ru'
 
 # User roles management
 def has_role(user_id: int, role: str) -> bool:
     """Check if user has a specific role"""
-    conn = get_connection()
-    cursor = conn.execute("SELECT roles FROM users WHERE id = ?", (user_id,))
-    row = cursor.fetchone()
-    conn.close()
+    with get_db() as conn:
+        cursor = conn.execute("SELECT roles FROM users WHERE id = ?", (user_id,))
+        row = cursor.fetchone()
 
-    if not row:
-        return False
+        if not row:
+            return False
 
-    roles = json.loads(row['roles']) if row['roles'] else []
-    return role in roles
+        roles = json.loads(row['roles']) if row['roles'] else []
+        return role in roles
 
 def get_user_roles(user_id: int) -> list:
     """Get user's roles"""
-    conn = get_connection()
-    cursor = conn.execute("SELECT roles FROM users WHERE id = ?", (user_id,))
-    row = cursor.fetchone()
-    conn.close()
+    with get_db() as conn:
+        cursor = conn.execute("SELECT roles FROM users WHERE id = ?", (user_id,))
+        row = cursor.fetchone()
 
-    if not row:
-        return []
+        if not row:
+            return []
 
-    return json.loads(row['roles']) if row['roles'] else []
+        return json.loads(row['roles']) if row['roles'] else []
 
 def add_role(user_id: int, role: str):
     """Add role to user"""
     roles = get_user_roles(user_id)
     if role not in roles:
         roles.append(role)
-        conn = get_connection()
-        conn.execute(
-            "UPDATE users SET roles = ?, updated_at = CURRENT_TIMESTAMP WHERE id = ?",
-            (json.dumps(roles), user_id)
-        )
-        conn.commit()
-        conn.close()
+        with get_db() as conn:
+            conn.execute(
+                "UPDATE users SET roles = ?, updated_at = CURRENT_TIMESTAMP WHERE id = ?",
+                (json.dumps(roles), user_id)
+            )
+            conn.commit()
 
 def remove_role(user_id: int, role: str):
     """Remove role from user"""
     roles = get_user_roles(user_id)
     if role in roles:
         roles.remove(role)
-        conn = get_connection()
-        conn.execute(
-            "UPDATE users SET roles = ?, updated_at = CURRENT_TIMESTAMP WHERE id = ?",
-            (json.dumps(roles), user_id)
-        )
-        conn.commit()
-        conn.close()
+        with get_db() as conn:
+            conn.execute(
+                "UPDATE users SET roles = ?, updated_at = CURRENT_TIMESTAMP WHERE id = ?",
+                (json.dumps(roles), user_id)
+            )
+            conn.commit()
 
 def get_users_by_role(role: str):
     """Get all users with specific role"""
-    conn = get_connection()
-    cursor = conn.execute("SELECT * FROM users WHERE is_active = 1")
-    users = []
-    for row in cursor.fetchall():
-        user = dict(row)
-        roles = json.loads(user['roles']) if user['roles'] else []
-        if role in roles:
-            users.append(user)
-    conn.close()
-    return users
+    with get_db() as conn:
+        cursor = conn.execute("SELECT * FROM users WHERE is_active = 1")
+        users = []
+        for row in cursor.fetchall():
+            user = dict(row)
+            roles = json.loads(user['roles']) if user['roles'] else []
+            if role in roles:
+                users.append(user)
+        return users
 
 # User state management
 def get_user_state(user_id: int):
     """Get user's current state"""
-    conn = get_connection()
-    cursor = conn.execute(
-        "SELECT state, data FROM user_states WHERE user_id = ?",
-        (user_id,)
-    )
-    row = cursor.fetchone()
-    conn.close()
-    if row:
-        return {
-            'state': row['state'],
-            'data': json.loads(row['data']) if row['data'] else {}
-        }
-    return {'state': None, 'data': {}}
+    with get_db() as conn:
+        cursor = conn.execute(
+            "SELECT state, data FROM user_states WHERE user_id = ?",
+            (user_id,)
+        )
+        row = cursor.fetchone()
+        if row:
+            return {
+                'state': row['state'],
+                'data': json.loads(row['data']) if row['data'] else {}
+            }
+        return {'state': None, 'data': {}}
 
 def set_user_state(user_id: int, state: str, data: dict = None):
     """Set user's current state"""
-    conn = get_connection()
-    data_json = json.dumps(data or {}, ensure_ascii=False)
-    conn.execute("""
-        INSERT INTO user_states (user_id, state, data)
-        VALUES (?, ?, ?)
-        ON CONFLICT(user_id) DO UPDATE SET
-            state = excluded.state,
-            data = excluded.data,
-            updated_at = CURRENT_TIMESTAMP
-    """, (user_id, state, data_json))
-    conn.commit()
-    conn.close()
+    with get_db() as conn:
+        data_json = json.dumps(data or {}, ensure_ascii=False)
+        conn.execute("""
+            INSERT INTO user_states (user_id, state, data)
+            VALUES (?, ?, ?)
+            ON CONFLICT(user_id) DO UPDATE SET
+                state = excluded.state,
+                data = excluded.data,
+                updated_at = CURRENT_TIMESTAMP
+        """, (user_id, state, data_json))
+        conn.commit()
 
 def clear_user_state(user_id: int):
     """Clear user's state"""
-    conn = get_connection()
-    conn.execute("DELETE FROM user_states WHERE user_id = ?", (user_id,))
-    conn.commit()
-    conn.close()
+    with get_db() as conn:
+        conn.execute("DELETE FROM user_states WHERE user_id = ?", (user_id,))
+        conn.commit()
 
 # City and district operations
 def get_cities() -> List[Dict[str, Any]]:
     """Get all cities"""
-    conn = get_connection()
-    cursor = conn.execute("SELECT * FROM cities ORDER BY name_ru")
-    cities = [dict(row) for row in cursor.fetchall()]
-    conn.close()
-    return cities
+    with get_db() as conn:
+        cursor = conn.execute("SELECT * FROM cities ORDER BY name_ru")
+        return [dict(row) for row in cursor.fetchall()]
 
 def get_districts(city_id: int) -> List[Dict[str, Any]]:
     """Get districts by city"""
-    conn = get_connection()
-    cursor = conn.execute(
-        "SELECT * FROM districts WHERE city_id = ? ORDER BY name_ru",
-        (city_id,)
-    )
-    districts = [dict(row) for row in cursor.fetchall()]
-    conn.close()
-    return districts
+    with get_db() as conn:
+        cursor = conn.execute(
+            "SELECT * FROM districts WHERE city_id = ? ORDER BY name_ru",
+            (city_id,)
+        )
+        return [dict(row) for row in cursor.fetchall()]
 
 def get_city_by_id(city_id: int) -> Optional[Dict[str, Any]]:
     """Get city by ID"""
-    conn = get_connection()
-    cursor = conn.execute("SELECT * FROM cities WHERE id = ?", (city_id,))
-    city = cursor.fetchone()
-    conn.close()
-    return dict(city) if city else None
+    with get_db() as conn:
+        cursor = conn.execute("SELECT * FROM cities WHERE id = ?", (city_id,))
+        city = cursor.fetchone()
+        return dict(city) if city else None
 
 def get_district_by_id(district_id: int) -> Optional[Dict[str, Any]]:
     """Get district by ID"""
-    conn = get_connection()
-    cursor = conn.execute("SELECT * FROM districts WHERE id = ?", (district_id,))
-    district = cursor.fetchone()
-    conn.close()
-    return dict(district) if district else None
+    with get_db() as conn:
+        cursor = conn.execute("SELECT * FROM districts WHERE id = ?", (district_id,))
+        district = cursor.fetchone()
+        return dict(district) if district else None
 
 # Apartment operations
 def get_apartments(city_id: int = None, district_id: int = None) -> List[Dict[str, Any]]:
@@ -326,21 +325,20 @@ def get_apartment_by_id(apartment_id: int) -> Optional[Dict[str, Any]]:
 
 def get_apartment_photos(apartment_id: int) -> List[str]:
     """Get photos for apartment"""
-    conn = get_connection()
-    cursor = conn.execute(
-        "SELECT photo_path FROM apartment_photos WHERE apartment_id = ? ORDER BY is_main DESC, sort_order",
-        (apartment_id,)
-    )
-    photos = []
-    project_root = Path(__file__).parent.parent
-    for row in cursor.fetchall():
-        photo_path = row['photo_path']
-        # Convert relative path to absolute path
-        if not Path(photo_path).is_absolute():
-            photo_path = str(project_root / photo_path)
-        photos.append(photo_path)
-    conn.close()
-    return photos
+    with get_db() as conn:
+        cursor = conn.execute(
+            "SELECT photo_path FROM apartment_photos WHERE apartment_id = ? ORDER BY is_main DESC, sort_order",
+            (apartment_id,)
+        )
+        photos = []
+        project_root = Path(__file__).parent.parent
+        for row in cursor.fetchall():
+            photo_path = row['photo_path']
+            # Convert relative path to absolute path
+            if not Path(photo_path).is_absolute():
+                photo_path = str(project_root / photo_path)
+            photos.append(photo_path)
+        return photos
 
 # Booking operations
 def create_booking(user_id: int, apartment_id: int, landlord_id: int,
@@ -468,13 +466,12 @@ def get_booking_by_id(booking_id: int) -> Optional[Dict[str, Any]]:
 
 def update_booking_status(booking_id: int, status: str):
     """Update booking status"""
-    conn = get_connection()
-    conn.execute(
-        "UPDATE bookings SET status = ?, updated_at = CURRENT_TIMESTAMP WHERE id = ?",
-        (status, booking_id)
-    )
-    conn.commit()
-    conn.close()
+    with get_db() as conn:
+        conn.execute(
+            "UPDATE bookings SET status = ?, updated_at = CURRENT_TIMESTAMP WHERE id = ?",
+            (status, booking_id)
+        )
+        conn.commit()
 
     # If booking is completed, update promotion progress
     if status == 'completed':
@@ -482,72 +479,67 @@ def update_booking_status(booking_id: int, status: str):
 
 def check_apartment_availability(apartment_id: int, check_in: str, check_out: str):
     """Check if apartment is available for given dates (confirmed and completed bookings block dates)"""
-    conn = get_connection()
-    # Synchronized with create_booking() - both check 'confirmed' AND 'completed' statuses
-    cursor = conn.execute("""
-        SELECT COUNT(*) as count FROM bookings
-        WHERE apartment_id = ?
-        AND status IN ('confirmed', 'completed')
-        AND (
-            (check_in_date <= ? AND check_out_date > ?)
-            OR (check_in_date < ? AND check_out_date >= ?)
-            OR (check_in_date >= ? AND check_out_date <= ?)
-        )
-    """, (apartment_id, check_out, check_in, check_out, check_in, check_in, check_out))
-    count = cursor.fetchone()['count']
-    conn.close()
-    return count == 0
+    with get_db() as conn:
+        # Synchronized with create_booking() - both check 'confirmed' AND 'completed' statuses
+        cursor = conn.execute("""
+            SELECT COUNT(*) as count FROM bookings
+            WHERE apartment_id = ?
+            AND status IN ('confirmed', 'completed')
+            AND (
+                (check_in_date <= ? AND check_out_date > ?)
+                OR (check_in_date < ? AND check_out_date >= ?)
+                OR (check_in_date >= ? AND check_out_date <= ?)
+            )
+        """, (apartment_id, check_out, check_in, check_out, check_in, check_in, check_out))
+        count = cursor.fetchone()['count']
+        return count == 0
 
 def get_booked_dates(apartment_id: int):
     """Get all booked dates for apartment (confirmed and completed bookings)"""
     from datetime import datetime, timedelta
 
-    conn = get_connection()
-    # Synchronized with check_apartment_availability() and create_booking()
-    cursor = conn.execute("""
-        SELECT check_in_date, check_out_date
-        FROM bookings
-        WHERE apartment_id = ? AND status IN ('confirmed', 'completed')
-    """, (apartment_id,))
+    with get_db() as conn:
+        # Synchronized with check_apartment_availability() and create_booking()
+        cursor = conn.execute("""
+            SELECT check_in_date, check_out_date
+            FROM bookings
+            WHERE apartment_id = ? AND status IN ('confirmed', 'completed')
+        """, (apartment_id,))
 
-    booked_dates = set()
-    for row in cursor.fetchall():
-        check_in = datetime.strptime(row['check_in_date'], "%Y-%m-%d").date()
-        check_out = datetime.strptime(row['check_out_date'], "%Y-%m-%d").date()
+        booked_dates = set()
+        for row in cursor.fetchall():
+            check_in = datetime.strptime(row['check_in_date'], "%Y-%m-%d").date()
+            check_out = datetime.strptime(row['check_out_date'], "%Y-%m-%d").date()
 
-        current = check_in
-        while current < check_out:
-            booked_dates.add(current.isoformat())
-            current += timedelta(days=1)
+            current = check_in
+            while current < check_out:
+                booked_dates.add(current.isoformat())
+                current += timedelta(days=1)
 
-    conn.close()
-    return list(booked_dates)
+        return list(booked_dates)
 
 # Favorites operations
 def add_to_favorites(user_id: int, apartment_id: int):
     """Add apartment to favorites"""
-    conn = get_connection()
-    try:
-        conn.execute(
-            "INSERT INTO favorites (user_id, apartment_id) VALUES (?, ?)",
-            (user_id, apartment_id)
-        )
-        conn.commit()
-        result = True
-    except sqlite3.IntegrityError:
-        result = False
-    conn.close()
-    return result
+    with get_db() as conn:
+        try:
+            conn.execute(
+                "INSERT INTO favorites (user_id, apartment_id) VALUES (?, ?)",
+                (user_id, apartment_id)
+            )
+            conn.commit()
+            return True
+        except sqlite3.IntegrityError:
+            return False
 
 def remove_from_favorites(user_id: int, apartment_id: int):
     """Remove apartment from favorites"""
-    conn = get_connection()
-    conn.execute(
-        "DELETE FROM favorites WHERE user_id = ? AND apartment_id = ?",
-        (user_id, apartment_id)
-    )
-    conn.commit()
-    conn.close()
+    with get_db() as conn:
+        conn.execute(
+            "DELETE FROM favorites WHERE user_id = ? AND apartment_id = ?",
+            (user_id, apartment_id)
+        )
+        conn.commit()
 
 def get_user_favorites(user_id: int) -> List[Dict[str, Any]]:
     """Get user's favorite apartments"""
@@ -575,14 +567,12 @@ def get_user_favorites(user_id: int) -> List[Dict[str, Any]]:
 
 def is_favorite(user_id: int, apartment_id: int) -> bool:
     """Check if apartment is in user's favorites"""
-    conn = get_connection()
-    cursor = conn.execute(
-        "SELECT 1 FROM favorites WHERE user_id = ? AND apartment_id = ?",
-        (user_id, apartment_id)
-    )
-    result = cursor.fetchone() is not None
-    conn.close()
-    return result
+    with get_db() as conn:
+        cursor = conn.execute(
+            "SELECT 1 FROM favorites WHERE user_id = ? AND apartment_id = ?",
+            (user_id, apartment_id)
+        )
+        return cursor.fetchone() is not None
 
 # Review operations
 def get_apartment_reviews(apartment_id: int, limit: int = 10, offset: int = 0) -> List[Dict[str, Any]]:
@@ -645,107 +635,96 @@ def create_review(user_id: int, apartment_id: int, booking_id: int,
 
 def can_leave_review(user_id: int, booking_id: int) -> bool:
     """Check if user can leave review for booking"""
-    conn = get_connection()
-    # Check if booking is completed and no review exists
-    cursor = conn.execute("""
-        SELECT 1 FROM bookings b
-        LEFT JOIN reviews r ON b.id = r.booking_id
-        WHERE b.id = ? AND b.user_id = ? AND b.status = 'completed' AND r.id IS NULL
-    """, (booking_id, user_id))
-    result = cursor.fetchone() is not None
-    conn.close()
-    return result
+    with get_db() as conn:
+        # Check if booking is completed and no review exists
+        cursor = conn.execute("""
+            SELECT 1 FROM bookings b
+            LEFT JOIN reviews r ON b.id = r.booking_id
+            WHERE b.id = ? AND b.user_id = ? AND b.status = 'completed' AND r.id IS NULL
+        """, (booking_id, user_id))
+        return cursor.fetchone() is not None
 
 def increment_review_helpful_count(review_id: int):
     """Increment helpful count for a review"""
-    conn = get_connection()
-    conn.execute(
-        "UPDATE reviews SET helpful_count = helpful_count + 1 WHERE id = ?",
-        (review_id,)
-    )
-    conn.commit()
-    conn.close()
+    with get_db() as conn:
+        conn.execute(
+            "UPDATE reviews SET helpful_count = helpful_count + 1 WHERE id = ?",
+            (review_id,)
+        )
+        conn.commit()
 
 def increment_review_not_helpful_count(review_id: int):
     """Increment not helpful count for a review"""
-    conn = get_connection()
-    conn.execute(
-        "UPDATE reviews SET not_helpful_count = not_helpful_count + 1 WHERE id = ?",
-        (review_id,)
-    )
-    conn.commit()
-    conn.close()
+    with get_db() as conn:
+        conn.execute(
+            "UPDATE reviews SET not_helpful_count = not_helpful_count + 1 WHERE id = ?",
+            (review_id,)
+        )
+        conn.commit()
 
 # Landlord operations
 def create_landlord_request(telegram_id: int, full_name: str, phone: str, email: str):
     """Create landlord connection request"""
-    conn = get_connection()
-    conn.execute(
-        "INSERT INTO landlord_requests (telegram_id, full_name, phone, email) VALUES (?, ?, ?, ?)",
-        (telegram_id, full_name, phone, email)
-    )
-    conn.commit()
-    conn.close()
+    with get_db() as conn:
+        conn.execute(
+            "INSERT INTO landlord_requests (telegram_id, full_name, phone, email) VALUES (?, ?, ?, ?)",
+            (telegram_id, full_name, phone, email)
+        )
+        conn.commit()
 
 def get_landlord_by_telegram_id(telegram_id: int):
     """Get landlord by telegram ID (user with landlord role)"""
-    conn = get_connection()
-    cursor = conn.execute(
-        "SELECT * FROM users WHERE telegram_id = ?",
-        (telegram_id,)
-    )
-    user = cursor.fetchone()
-    conn.close()
+    with get_db() as conn:
+        cursor = conn.execute(
+            "SELECT * FROM users WHERE telegram_id = ?",
+            (telegram_id,)
+        )
+        user = cursor.fetchone()
 
-    if not user:
-        return None
+        if not user:
+            return None
 
-    user = dict(user)
-    roles = json.loads(user['roles']) if user['roles'] else []
+        user = dict(user)
+        roles = json.loads(user['roles']) if user['roles'] else []
 
-    # Return user if they have landlord role
-    return user if 'landlord' in roles else None
+        # Return user if they have landlord role
+        return user if 'landlord' in roles else None
 
 # Messages operations
 def create_message(booking_id: int, sender_id: int, message: str):
     """Create new message"""
-    conn = get_connection()
-    conn.execute(
-        "INSERT INTO messages (booking_id, sender_id, message) VALUES (?, ?, ?)",
-        (booking_id, sender_id, message)
-    )
-    conn.commit()
-    conn.close()
+    with get_db() as conn:
+        conn.execute(
+            "INSERT INTO messages (booking_id, sender_id, message) VALUES (?, ?, ?)",
+            (booking_id, sender_id, message)
+        )
+        conn.commit()
 
 def get_booking_messages(booking_id: int):
     """Get all messages for booking"""
-    conn = get_connection()
-    cursor = conn.execute(
-        "SELECT * FROM messages WHERE booking_id = ? ORDER BY created_at",
-        (booking_id,)
-    )
-    messages = [dict(row) for row in cursor.fetchall()]
-    conn.close()
-    return messages
+    with get_db() as conn:
+        cursor = conn.execute(
+            "SELECT * FROM messages WHERE booking_id = ? ORDER BY created_at",
+            (booking_id,)
+        )
+        return [dict(row) for row in cursor.fetchall()]
 
 # Settings operations
 def get_setting(key: str):
     """Get setting value"""
-    conn = get_connection()
-    cursor = conn.execute("SELECT value FROM settings WHERE key = ?", (key,))
-    row = cursor.fetchone()
-    conn.close()
-    return row['value'] if row else None
+    with get_db() as conn:
+        cursor = conn.execute("SELECT value FROM settings WHERE key = ?", (key,))
+        row = cursor.fetchone()
+        return row['value'] if row else None
 
 def set_setting(key: str, value: str):
     """Set setting value"""
-    conn = get_connection()
-    conn.execute(
-        "UPDATE settings SET value = ?, updated_at = CURRENT_TIMESTAMP WHERE key = ?",
-        (value, key)
-    )
-    conn.commit()
-    conn.close()
+    with get_db() as conn:
+        conn.execute(
+            "UPDATE settings SET value = ?, updated_at = CURRENT_TIMESTAMP WHERE key = ?",
+            (value, key)
+        )
+        conn.commit()
 
 # Promotion operations
 def get_promotions(active_only: bool = False) -> List[Dict[str, Any]]:
@@ -792,22 +771,20 @@ def update_promotion(promotion_id: int, **kwargs):
     if not kwargs:
         return
 
-    conn = get_connection()
-    updates = ', '.join([f"{k} = ?" for k in kwargs.keys()])
-    values = list(kwargs.values()) + [promotion_id]
-    conn.execute(
-        f"UPDATE promotions SET {updates}, updated_at = CURRENT_TIMESTAMP WHERE id = ?",
-        values
-    )
-    conn.commit()
-    conn.close()
+    with get_db() as conn:
+        updates = ', '.join([f"{k} = ?" for k in kwargs.keys()])
+        values = list(kwargs.values()) + [promotion_id]
+        conn.execute(
+            f"UPDATE promotions SET {updates}, updated_at = CURRENT_TIMESTAMP WHERE id = ?",
+            values
+        )
+        conn.commit()
 
 def delete_promotion(promotion_id: int):
     """Delete promotion (this will set apartment promotion_id to NULL due to CASCADE)"""
-    conn = get_connection()
-    conn.execute("DELETE FROM promotions WHERE id = ?", (promotion_id,))
-    conn.commit()
-    conn.close()
+    with get_db() as conn:
+        conn.execute("DELETE FROM promotions WHERE id = ?", (promotion_id,))
+        conn.commit()
 
 # User promotion progress operations
 def get_user_promotion_progress(user_id: int, apartment_id: int) -> Optional[Dict[str, Any]]:
@@ -842,31 +819,29 @@ def update_promotion_progress(user_id: int, apartment_id: int, promotion_id: int
                               completed_bookings: int, cycle_number: int = None,
                               last_booking_id: int = None, bonus_applied: bool = False):
     """Update user's promotion progress"""
-    conn = get_connection()
+    with get_db() as conn:
+        if bonus_applied:
+            # Reset cycle after bonus is applied
+            conn.execute("""
+                UPDATE user_promotion_progress
+                SET completed_bookings = 0,
+                    cycle_number = cycle_number + 1,
+                    last_booking_id = ?,
+                    bonus_applied_at = CURRENT_TIMESTAMP,
+                    updated_at = CURRENT_TIMESTAMP
+                WHERE user_id = ? AND apartment_id = ? AND promotion_id = ?
+            """, (last_booking_id, user_id, apartment_id, promotion_id))
+        else:
+            # Just update progress
+            conn.execute("""
+                UPDATE user_promotion_progress
+                SET completed_bookings = ?,
+                    last_booking_id = ?,
+                    updated_at = CURRENT_TIMESTAMP
+                WHERE user_id = ? AND apartment_id = ? AND promotion_id = ?
+            """, (completed_bookings, last_booking_id, user_id, apartment_id, promotion_id))
 
-    if bonus_applied:
-        # Reset cycle after bonus is applied
-        conn.execute("""
-            UPDATE user_promotion_progress
-            SET completed_bookings = 0,
-                cycle_number = cycle_number + 1,
-                last_booking_id = ?,
-                bonus_applied_at = CURRENT_TIMESTAMP,
-                updated_at = CURRENT_TIMESTAMP
-            WHERE user_id = ? AND apartment_id = ? AND promotion_id = ?
-        """, (last_booking_id, user_id, apartment_id, promotion_id))
-    else:
-        # Just update progress
-        conn.execute("""
-            UPDATE user_promotion_progress
-            SET completed_bookings = ?,
-                last_booking_id = ?,
-                updated_at = CURRENT_TIMESTAMP
-            WHERE user_id = ? AND apartment_id = ? AND promotion_id = ?
-        """, (completed_bookings, last_booking_id, user_id, apartment_id, promotion_id))
-
-    conn.commit()
-    conn.close()
+        conn.commit()
 
 def calculate_promotion_benefit(user_id: int, apartment_id: int, num_days: int):
     """
@@ -924,17 +899,16 @@ def calculate_promotion_benefit(user_id: int, apartment_id: int, num_days: int):
 
 def apply_promotion_to_booking(booking_id: int, promotion_id: int, discount_days: int, original_price: float):
     """Mark booking with promotion discount"""
-    conn = get_connection()
-    conn.execute("""
-        UPDATE bookings
-        SET promotion_id = ?,
-            promotion_discount_days = ?,
-            original_price = ?,
-            updated_at = CURRENT_TIMESTAMP
-        WHERE id = ?
-    """, (promotion_id, discount_days, original_price, booking_id))
-    conn.commit()
-    conn.close()
+    with get_db() as conn:
+        conn.execute("""
+            UPDATE bookings
+            SET promotion_id = ?,
+                promotion_discount_days = ?,
+                original_price = ?,
+                updated_at = CURRENT_TIMESTAMP
+            WHERE id = ?
+        """, (promotion_id, discount_days, original_price, booking_id))
+        conn.commit()
 
 def complete_booking_with_promotion(booking_id: int):
     """

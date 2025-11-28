@@ -1,12 +1,27 @@
 """
 Utility functions for the bot
 """
+import os
 import re
 from aiogram.types import Message, FSInputFile, InputMediaPhoto
 
 import database as db
 from locales import get_text
 from constants import MAX_PHOTOS_PER_MESSAGE, PRICE_THOUSANDS_SEPARATOR
+
+
+def pluralize_days(count: int, lang: str) -> str:
+    """Return correct plural form for days in given language"""
+    if lang == 'kk':
+        return get_text('day_singular', lang)  # Kazakh has no plural forms
+    
+    # Russian plural rules
+    if count % 10 == 1 and count % 100 != 11:
+        return get_text('day_singular', lang)
+    elif count % 10 in [2, 3, 4] and count % 100 not in [12, 13, 14]:
+        return get_text('day_few', lang)
+    else:
+        return get_text('day_many', lang)
 
 
 def validate_phone(phone: str) -> bool:
@@ -43,18 +58,21 @@ def format_apartment_card(apartment: dict, lang: str = 'ru', user_id: int = None
 
     if apartment.get('promotion_name'):
         promo_text = f"🎁 *{apartment['promotion_name']}*\n"
-        promo_text += f"   {apartment['promotion_bookings_required']}-е заселение → {apartment['promotion_free_days']} "
-        promo_text += "день" if apartment['promotion_free_days'] == 1 else "дня" if apartment['promotion_free_days'] < 5 else "дней"
-        promo_text += " бесплатно\n"
+        free_days = apartment['promotion_free_days']
+        promo_text += f"   {apartment['promotion_bookings_required']}-"
+        promo_text += ("е заселение → " if lang == 'ru' else " орналасу → ")
+        promo_text += f"{free_days} {pluralize_days(free_days, lang)} {get_text('free_days', lang)}\n"
 
         if user_id:
             progress = db.get_user_promotion_progress(user_id, apartment['id'])
             if progress:
                 current = progress['completed_bookings']
                 required = progress['bookings_required']
-                promo_text += f"   📊 Ваш прогресс: {current}/{required}\n"
+                progress_label = "Ваш прогресс" if lang == 'ru' else "Сіздің прогресіңіз"
+                promo_text += f"   📊 {progress_label}: {current}/{required}\n"
                 if current + 1 >= required:
-                    promo_text += f"   ✨ Следующее бронирование — с бонусом!\n"
+                    bonus_text = "Следующее бронирование — с бонусом!" if lang == 'ru' else "Келесі броньдау — бонуспен!"
+                    promo_text += f"   ✨ {bonus_text}\n"
 
         text += promo_text + "\n"
 
@@ -89,21 +107,32 @@ async def send_apartment_card(message: Message, apartment: dict, keyboard, lang:
     text = format_apartment_card(apartment, lang, user_id)
     photos = apartment.get('photos', [])
 
-    if photos:
+    # Filter only existing photo files
+    valid_photos = [p for p in photos if os.path.exists(p)]
+    
+    if valid_photos:
         try:
             media_group = []
-            for i, photo_path in enumerate(photos[:MAX_PHOTOS_PER_MESSAGE]):
-                photo = FSInputFile(photo_path)
-                if i == 0:
-                    media_group.append(InputMediaPhoto(media=photo, caption=text, parse_mode="Markdown"))
-                else:
-                    media_group.append(InputMediaPhoto(media=photo))
+            for i, photo_path in enumerate(valid_photos[:MAX_PHOTOS_PER_MESSAGE]):
+                try:
+                    photo = FSInputFile(photo_path)
+                    if i == 0:
+                        media_group.append(InputMediaPhoto(media=photo, caption=text, parse_mode="Markdown"))
+                    else:
+                        media_group.append(InputMediaPhoto(media=photo))
+                except Exception as e:
+                    logger.warning(f"Failed to load photo {photo_path}: {e}")
+                    continue
 
-            await message.answer_media_group(media=media_group)
+            if media_group:
+                await message.answer_media_group(media=media_group)
+            else:
+                # All photos failed to load
+                await message.answer(text, parse_mode="Markdown")
         except Exception as e:
             logger.error(f"Error sending photos: {e}")
             await message.answer(text, parse_mode="Markdown")
     else:
         await message.answer(text, parse_mode="Markdown")
 
-    await message.answer("👇 Действия:", reply_markup=keyboard)
+    await message.answer(get_text('actions_prompt', lang), reply_markup=keyboard)

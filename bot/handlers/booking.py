@@ -17,10 +17,12 @@ from logger import setup_logger, get_audit_logger, log_booking_action, log_error
 from notifications import notify_landlord_new_booking
 from constants import PRICE_CURRENCY
 from utils import format_price
+from services.booking_service import BookingService
 
 router = Router()
 logger = setup_logger('booking')
 audit_logger = get_audit_logger()
+booking_service = BookingService()
 
 
 class BookingStates(StatesGroup):
@@ -35,6 +37,16 @@ async def start_booking(callback: CallbackQuery, state: FSMContext):
     telegram_id = callback.from_user.id
     user = db.get_user(telegram_id)
     lang = user['language']
+
+    # Validate apartment exists and is active
+    apartment = db.get_apartment_by_id(apartment_id)
+    if not apartment:
+        await callback.answer(get_text('apartment_not_found', lang), show_alert=True)
+        return
+    
+    if not apartment.get('is_active'):
+        await callback.answer(get_text('apartment_inactive', lang), show_alert=True)
+        return
 
     data = await state.get_data()
     filters = data.get('filters', {})
@@ -71,7 +83,7 @@ async def start_booking(callback: CallbackQuery, state: FSMContext):
 
 
 async def create_booking_request(message: Message, state: FSMContext, user: dict):
-    """Create booking request"""
+    """Create booking request using BookingService"""
     from config import get_bot_token
 
     data = await state.get_data()
@@ -79,23 +91,35 @@ async def create_booking_request(message: Message, state: FSMContext, user: dict
     filters = data.get('filters', {})
     lang = user['language']
 
+    # Validate dates using service
+    is_valid, error_msg = booking_service.validate_booking_dates(
+        filters['check_in'], filters['check_out']
+    )
+    if not is_valid:
+        await message.answer(error_msg, reply_markup=get_main_menu_keyboard(lang))
+        await state.clear()
+        return
+
+    # Check availability using service
+    if not booking_service.check_availability(apartment_id, filters['check_in'], filters['check_out']):
+        await message.answer(
+            get_text('apartment_booked', lang),
+            reply_markup=get_main_menu_keyboard(lang)
+        )
+        await state.clear()
+        return
+
     apartment = db.get_apartment_by_id(apartment_id)
 
-    check_in = datetime.strptime(filters['check_in'], "%Y-%m-%d")
-    check_out = datetime.strptime(filters['check_out'], "%Y-%m-%d")
-    days = (check_out - check_in).days
-    original_total_price = apartment['price_per_day'] * days
+    # Calculate price using service
+    total_price, original_total_price, days, should_apply_bonus, discount_days = \
+        booking_service.calculate_booking_price(
+            apartment_id, user['id'],
+            filters['check_in'], filters['check_out']
+        )
 
-    should_apply_bonus, free_days, progress_info = db.calculate_promotion_benefit(
-        user['id'], apartment_id, days
-    )
-
-    discount_days = free_days if should_apply_bonus else 0
-    paid_days = days - discount_days
-    total_price = apartment['price_per_day'] * paid_days
-
-    fee_percent = float(db.get_setting('platform_fee_percent') or 5)
-    platform_fee = total_price * (fee_percent / 100)
+    # Calculate platform fee using service
+    platform_fee = booking_service.get_platform_fee(total_price)
 
     try:
         booking_id = db.create_booking(
@@ -114,14 +138,14 @@ async def create_booking_request(message: Message, state: FSMContext, user: dict
 
         confirmation_text = get_text('booking_created', lang) + "\n\n"
         confirmation_text += f"📅 {filters['check_in']} - {filters['check_out']}\n"
+        confirmation_text += f"🏠 {days} " + get_text('days', lang) + "\n"
         confirmation_text += f"💰 {get_text('total', lang)}: {format_price(total_price)} {PRICE_CURRENCY}\n"
 
         if should_apply_bonus:
+            from utils import pluralize_days
             confirmation_text += f"\n🎉 *{get_text('promotion_applied', lang)}*\n"
-            confirmation_text += f"🎁 -{discount_days} "
-            confirmation_text += "день" if discount_days == 1 else "дня" if discount_days < 5 else "дней"
-            confirmation_text += " бесплатно!\n"
-            confirmation_text += f"💵 Вы экономите: {format_price(original_total_price - total_price)} {PRICE_CURRENCY}\n"
+            confirmation_text += f"🎁 -{discount_days} {pluralize_days(discount_days, lang)} {get_text('free_days', lang)}!\n"
+            confirmation_text += get_text('you_save', lang, amount=format_price(original_total_price - total_price)) + "\n"
 
         log_booking_action(
             audit_logger,
@@ -203,6 +227,17 @@ async def cancel_booking_confirm(callback: CallbackQuery):
     booking_id = int(callback.data.split("_")[2])
     telegram_id = callback.from_user.id
     lang = db.get_user_language(telegram_id)
+    user = db.get_user(telegram_id)
+
+    # Validate booking exists and belongs to user
+    booking = db.get_booking_by_id(booking_id)
+    if not booking:
+        await callback.answer(get_text('booking_not_found', lang), show_alert=True)
+        return
+    
+    if booking['user_id'] != user['id']:
+        await callback.answer(get_text('booking_not_found', lang), show_alert=True)
+        return
 
     await callback.message.answer(
         get_text('confirm_cancel_booking', lang),
@@ -217,6 +252,13 @@ async def confirm_cancel_booking(callback: CallbackQuery):
     booking_id = int(callback.data.split("_")[2])
     telegram_id = callback.from_user.id
     lang = db.get_user_language(telegram_id)
+    user = db.get_user(telegram_id)
+
+    # Validate booking exists and belongs to user
+    booking = db.get_booking_by_id(booking_id)
+    if not booking or booking['user_id'] != user['id']:
+        await callback.answer(get_text('booking_not_found', lang), show_alert=True)
+        return
 
     db.update_booking_status(booking_id, 'cancelled')
 

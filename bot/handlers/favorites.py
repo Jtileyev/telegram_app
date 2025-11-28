@@ -70,6 +70,12 @@ async def add_to_favorites(callback: CallbackQuery, state: FSMContext):
     user = db.get_user(telegram_id)
     lang = user['language']
 
+    # Validate apartment exists
+    apartment = db.get_apartment_by_id(apartment_id)
+    if not apartment:
+        await callback.answer(get_text('apartment_not_found', lang), show_alert=True)
+        return
+
     db.add_to_favorites(user['id'], apartment_id)
     await callback.answer(get_text('added_to_favorites', lang))
 
@@ -96,6 +102,12 @@ async def remove_from_favorites(callback: CallbackQuery, state: FSMContext):
     user = db.get_user(telegram_id)
     lang = user['language']
 
+    # Validate apartment exists
+    apartment = db.get_apartment_by_id(apartment_id)
+    if not apartment:
+        await callback.answer(get_text('apartment_not_found', lang), show_alert=True)
+        return
+
     db.remove_from_favorites(user['id'], apartment_id)
     await callback.answer(get_text('removed_from_favorites', lang))
 
@@ -121,6 +133,12 @@ async def confirm_unfavorite(callback: CallbackQuery):
     telegram_id = callback.from_user.id
     user = db.get_user(telegram_id)
     lang = user['language']
+
+    # Validate apartment exists
+    apartment = db.get_apartment_by_id(apartment_id)
+    if not apartment:
+        await callback.answer(get_text('apartment_not_found', lang), show_alert=True)
+        return
 
     db.remove_from_favorites(user['id'], apartment_id)
     await callback.message.edit_text(get_text('removed_from_favorites', lang))

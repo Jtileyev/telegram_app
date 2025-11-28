@@ -273,6 +273,14 @@ def main():
     conn.commit()
     conn.close()
 
+    # Apply migrations
+    print("\n6. Applying database migrations...")
+    try:
+        from database.migrate import apply_migrations
+        apply_migrations()
+    except Exception as e:
+        print(f"   ⚠️  Migration warning: {e}")
+
     print("\n" + "="*60)
     print("✅ Database initialized successfully!")
     print("="*60)

@@ -29,6 +29,12 @@ async def show_reviews(callback: CallbackQuery, state: FSMContext):
     telegram_id = callback.from_user.id
     lang = db.get_user_language(telegram_id)
 
+    # Validate apartment exists
+    apartment = db.get_apartment_by_id(apartment_id)
+    if not apartment:
+        await callback.answer(get_text('apartment_not_found', lang), show_alert=True)
+        return
+
     reviews = db.get_apartment_reviews(apartment_id, limit=REVIEWS_PER_PAGE)
 
     if not reviews:
@@ -110,6 +116,12 @@ async def reviews_pagination(callback: CallbackQuery):
     telegram_id = callback.from_user.id
     lang = db.get_user_language(telegram_id)
 
+    # Validate apartment exists
+    apartment = db.get_apartment_by_id(apartment_id)
+    if not apartment:
+        await callback.answer(get_text('apartment_not_found', lang), show_alert=True)
+        return
+
     offset = (page - 1) * REVIEWS_PER_PAGE
     reviews = db.get_apartment_reviews(apartment_id, limit=REVIEWS_PER_PAGE, offset=offset)
 
@@ -122,9 +134,8 @@ async def reviews_pagination(callback: CallbackQuery):
             if review.get('comment'):
                 text += f"{review['comment']}\n\n"
 
-        conn = db.get_connection()
-        total = conn.execute("SELECT COUNT(*) FROM reviews WHERE apartment_id = ?", (apartment_id,)).fetchone()[0]
-        conn.close()
+        with db.get_db() as conn:
+            total = conn.execute("SELECT COUNT(*) FROM reviews WHERE apartment_id = ?", (apartment_id,)).fetchone()[0]
         total_pages = (total + REVIEWS_PER_PAGE - 1) // REVIEWS_PER_PAGE
 
         await callback.message.edit_text(

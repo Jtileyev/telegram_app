@@ -195,6 +195,18 @@ MESSAGES = {
         'marked_not_helpful': '👎 Спасибо за отзыв!',
         'kept_in_favorites': '⭐ Квартира осталась в избранном',
         'confirm_cancel_booking': '❓ Вы уверены, что хотите отменить бронирование?',
+
+        # Actions and validation
+        'actions_prompt': '👇 Действия:',
+        'apartment_not_found': '❌ Квартира не найдена',
+        'apartment_inactive': '⚠️ Эта квартира временно недоступна',
+        'booking_not_found': '❌ Бронирование не найдено',
+        'free_days': 'бесплатно',
+        'day_singular': 'день',
+        'day_few': 'дня',
+        'day_many': 'дней',
+        'you_save': '💵 Вы экономите: {amount} ₸',
+        'photo_not_available': '📷 Фото временно недоступно',
     },
 
     'kk': {
@@ -391,6 +403,18 @@ MESSAGES = {
         'marked_not_helpful': '👎 Пікіріңізге рахмет!',
         'kept_in_favorites': '⭐ Пәтер таңдаулыларда қалды',
         'confirm_cancel_booking': '❓ Броньдауды болдырмағыңыз келетініне сенімдісіз бе?',
+
+        # Actions and validation
+        'actions_prompt': '👇 Әрекеттер:',
+        'apartment_not_found': '❌ Пәтер табылмады',
+        'apartment_inactive': '⚠️ Бұл пәтер уақытша қолжетімсіз',
+        'booking_not_found': '❌ Броньдау табылмады',
+        'free_days': 'тегін',
+        'day_singular': 'күн',
+        'day_few': 'күн',
+        'day_many': 'күн',
+        'you_save': '💵 Сіз үнемдейсіз: {amount} ₸',
+        'photo_not_available': '📷 Фото уақытша қолжетімсіз',
     }
 }
 
