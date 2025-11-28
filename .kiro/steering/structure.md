@@ -1,83 +1,68 @@
-# Project Structure
+---
+inclusion: always
+---
 
-```
-astavaisya/
-├── bot/                    # Telegram bot (Python)
-│   ├── main.py             # Entry point, bot initialization, core handlers
-│   ├── config.py           # Configuration from .env
-│   ├── constants.py        # Application constants (limits, rates, etc.)
-│   ├── database.py         # SQLite operations layer
-│   ├── keyboards.py        # Inline and Reply keyboards
-│   ├── locales.py          # i18n strings (RU/KK)
-│   ├── logger.py           # Centralized logging
-│   ├── rate_limiter.py     # Rate limiting middleware
-│   ├── notifications.py    # Notification sending
-│   ├── utils.py            # Validation, formatting utilities
-│   ├── handlers/           # Command and callback handlers
-│   │   ├── registration.py
-│   │   ├── search.py
-│   │   ├── booking.py
-│   │   ├── favorites.py
-│   │   ├── reviews.py
-│   │   └── landlords.py
-│   └── services/           # Business logic layer
-│       ├── booking_service.py
-│       └── notification_service.py
-│
-├── admin/                  # Admin panel (PHP)
-│   ├── config.php          # Configuration, auth helpers
-│   ├── header.php          # Common header
-│   ├── footer.php          # Common footer
-│   ├── index.php           # Dashboard
-│   ├── apartments.php      # Apartment management
-│   ├── bookings.php        # Booking management
-│   ├── users.php           # User management
-│   ├── landlords.php       # Landlord management
-│   ├── reviews.php         # Review moderation
-│   ├── promotions.php      # Promotions management
-│   ├── settings.php        # Platform settings
-│   └── phpliteadmin.php    # SQLite browser
-│
-├── database/
-│   ├── schema.sql          # Database schema
-│   └── rental.db           # SQLite database file
-│
-├── uploads/
-│   └── apartments/         # Apartment photos
-│
-├── tasks/                  # Refactoring tasks documentation
-│
-├── .env.example            # Environment template
-├── requirements.txt        # Python dependencies
-├── init_database.py        # Database initialization
-├── start.sh / stop.sh      # Bot lifecycle scripts
-└── backup.sh / restore.sh  # Database backup scripts
-```
+# Project Structure & Architecture
 
-## Architecture Patterns
+## Directory Layout
 
-### Bot Layer Structure
-```
-main.py (entry) → handlers/ (user interaction) → services/ (business logic) → database.py (data access)
-```
+| Path | Purpose |
+|------|---------|
+| `bot/` | Telegram bot (Python 3.8+, aiogram 3.x) |
+| `bot/handlers/` | User interaction handlers by feature |
+| `bot/services/` | Business logic layer |
+| `admin/` | Admin panel (PHP 7.4+, Bootstrap 5) |
+| `database/` | SQLite database and migrations |
+| `uploads/apartments/` | Apartment photo storage |
 
-### Key Tables
-- `users` — Users with roles (user, landlord, admin)
-- `apartments` — Rental listings
-- `bookings` — Booking records
-- `reviews` — User reviews
-- `favorites` — Saved apartments
-- `promotions` — Promotional offers
-- `cities`, `districts` — Geography
+## Bot Architecture
 
-### Localization
-All user-facing strings in `bot/locales.py` as `MESSAGES` dict with `ru` and `kk` keys.
-Use `get_text(key, lang, **kwargs)` for translations.
+**Data flow:** `main.py` → `handlers/` → `services/` → `database.py`
 
-### FSM States
-Defined in `main.py` as `StatesGroup` classes:
-- `RegistrationStates`
-- `SearchStates`
-- `BookingStates`
-- `LandlordStates`
-- `ReviewStates`
+### Key Files
+- `main.py` — Entry point, FSM state definitions, core handlers
+- `database.py` — All SQLite operations (single data access layer)
+- `locales.py` — i18n strings (`MESSAGES` dict with `ru`/`kk` keys)
+- `keyboards.py` — Inline and Reply keyboard builders
+- `constants.py` — Application limits, rates, magic numbers
+
+### Conventions
+- Use `get_text(key, lang, **kwargs)` for all user-facing strings
+- FSM states defined as `StatesGroup` classes in `main.py`
+- Handlers receive `message`/`callback_query` and `state` from aiogram
+- Services contain business logic, handlers handle user interaction only
+
+## Admin Panel Architecture
+
+- Each PHP file is a standalone page with `header.php`/`footer.php` includes
+- `config.php` — Database connection, auth helpers, session management
+- Bootstrap 5 via CDN for UI components
+
+## Database Schema
+
+| Table | Purpose |
+|-------|---------|
+| `users` | Users with roles: user, landlord, admin |
+| `apartments` | Rental listings with photos, amenities |
+| `bookings` | Booking records with status tracking |
+| `reviews` | User reviews and ratings |
+| `favorites` | User saved apartments |
+| `promotions` | Promotional offers (N-th booking free) |
+| `cities`, `districts` | Geographic hierarchy |
+
+## Code Conventions
+
+### Python (Bot)
+- Async/await for all I/O operations
+- Type hints encouraged
+- Logging via `bot/logger.py`
+- Rate limiting via `bot/rate_limiter.py`
+
+### PHP (Admin)
+- Include auth check at top of protected pages
+- Use prepared statements for all SQL queries
+- Escape output with `htmlspecialchars()`
+
+### Shared
+- Single SQLite database at `database/rental.db`
+- Schema source of truth: `database/schema.sql`
