@@ -104,6 +104,13 @@ jobs:
             sudo ln -sf /etc/nginx/sites-available/astavaisya /etc/nginx/sites-enabled/
             sudo nginx -t && sudo systemctl reload nginx
             
+            # Установка certbot если нет
+            if ! command -v certbot &> /dev/null; then
+              echo "📦 Installing certbot..."
+              sudo apt update
+              sudo apt install -y certbot python3-certbot-nginx
+            fi
+            
             # SSL сертификат (только если домен резолвится и сертификата ещё нет)
             DOMAIN="actavaysa.kz"
             if host $DOMAIN > /dev/null 2>&1; then
