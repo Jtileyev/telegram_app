@@ -98,11 +98,16 @@ jobs:
               python database/apply_promotions_migration.py || true
             fi
             
-            # Обновляем nginx конфиг
-            echo "🌐 Updating nginx config..."
-            sudo cp nginx/astavaisya.conf /etc/nginx/sites-available/astavaisya
-            sudo ln -sf /etc/nginx/sites-available/astavaisya /etc/nginx/sites-enabled/
-            sudo nginx -t && sudo systemctl reload nginx
+            # Обновляем nginx конфиг ТОЛЬКО если его ещё нет (чтобы не затереть SSL настройки от certbot)
+            echo "🌐 Checking nginx config..."
+            if [ ! -f /etc/nginx/sites-available/astavaisya ]; then
+              echo "📝 Creating initial nginx config..."
+              sudo cp nginx/astavaisya.conf /etc/nginx/sites-available/astavaisya
+              sudo ln -sf /etc/nginx/sites-available/astavaisya /etc/nginx/sites-enabled/
+              sudo nginx -t && sudo systemctl reload nginx
+            else
+              echo "✓ Nginx config already exists, preserving SSL settings"
+            fi
             
             # Установка certbot если нет
             if ! command -v certbot &> /dev/null; then

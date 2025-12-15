@@ -58,11 +58,12 @@ def format_apartment_card(apartment: dict, lang: str = 'ru', user_id: int = None
 
     if apartment.get('promotion_name'):
         promo_text = f"🎁 *{apartment['promotion_name']}*\n"
-        free_days = apartment['promotion_free_days']
-        promo_text += f"   {apartment['promotion_bookings_required']}-"
-        promo_text += ("е заселение → " if lang == 'ru' else " орналасу → ")
-        promo_text += f"{free_days} {pluralize_days(free_days, lang)} {get_text('free_days', lang)}\n"
+        
+        # Описание акции
+        if apartment.get('promotion_description'):
+            promo_text += f"   {apartment['promotion_description']}\n"
 
+        # Прогресс пользователя
         if user_id:
             progress = db.get_user_promotion_progress(user_id, apartment['id'])
             if progress:
