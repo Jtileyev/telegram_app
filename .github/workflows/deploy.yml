@@ -42,17 +42,20 @@ jobs:
       
       - name: Deploy via SSH
         uses: appleboy/ssh-action@v1.0.3
+        env:
+          GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
         with:
           host: ${{ secrets.VDS_HOST }}
           username: ${{ secrets.VDS_USER }}
           key: ${{ secrets.VDS_SSH_KEY }}
           port: ${{ secrets.VDS_PORT || 22 }}
+          envs: GITHUB_TOKEN
           script: |
             set -e
             
             # Переменные
             APP_DIR="${{ secrets.APP_DIR || '/var/www/astavaisya' }}"
-            REPO_URL="https://github.com/${{ github.repository }}.git"
+            REPO_URL="https://x-access-token:${GITHUB_TOKEN}@github.com/${{ github.repository }}.git"
             
             echo "📦 Deploying to $APP_DIR..."
             
@@ -66,6 +69,8 @@ jobs:
             # Первый деплой или обновление
             if [ -d ".git" ]; then
               echo "🔄 Pulling latest changes..."
+              # Update remote URL with token
+              git remote set-url origin $REPO_URL
               git fetch origin main
               git reset --hard origin/main
             else
