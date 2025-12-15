@@ -60,7 +60,7 @@ async def handle_history(message: Message, state: FSMContext):
 
 # Language change handler
 @router.message(F.text.in_([
-    "🌐 Язык", "🌐 Тіл"
+    "🌐 Сменить язык", "🌐 Тілді өзгерту"
 ]))
 async def handle_change_language(message: Message, state: FSMContext):
     """Handle change language button"""
