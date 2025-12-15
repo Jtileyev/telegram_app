@@ -31,40 +31,54 @@ if ($_SERVER['REQUEST_METHOD'] === 'POST') {
         if (empty($email) || !filter_var($email, FILTER_VALIDATE_EMAIL)) {
             $error = 'Введите корректный email';
         } else {
-            // Check in users table
-            $stmt = $db->prepare("SELECT * FROM users WHERE email = ? AND is_active = 1");
-            $stmt->execute([$email]);
-            $foundUser = $stmt->fetch();
+            // First check if it's the super admin from .env
+            if ($email === ADMIN_EMAIL) {
+                $user = [
+                    'id' => 0,
+                    'email' => ADMIN_EMAIL,
+                    'full_name' => 'Administrator',
+                    'password' => ADMIN_PASSWORD,
+                    'roles' => ['admin'],
+                    'is_env_admin' => true
+                ];
+                $step = 'password';
+                $_SESSION['temp_user'] = $user;
+            } else {
+                // Check in users table
+                $stmt = $db->prepare("SELECT * FROM users WHERE email = ? AND is_active = 1");
+                $stmt->execute([$email]);
+                $foundUser = $stmt->fetch();
 
-            if ($foundUser) {
-                $roles = json_decode($foundUser['roles'], true) ?: [];
+                if ($foundUser) {
+                    $roles = json_decode($foundUser['roles'], true) ?: [];
 
-                // Check if user has admin or landlord role
-                if (in_array('admin', $roles) || in_array('landlord', $roles)) {
-                    $user = [
-                        'id' => $foundUser['id'],
-                        'email' => $foundUser['email'],
-                        'full_name' => $foundUser['full_name'],
-                        'password' => $foundUser['password'],
-                        'roles' => $roles
-                    ];
+                    // Check if user has admin or landlord role
+                    if (in_array('admin', $roles) || in_array('landlord', $roles)) {
+                        $user = [
+                            'id' => $foundUser['id'],
+                            'email' => $foundUser['email'],
+                            'full_name' => $foundUser['full_name'],
+                            'password' => $foundUser['password'],
+                            'roles' => $roles
+                        ];
 
-                    // Check if password is set
-                    if (empty($foundUser['password'])) {
-                        $step = 'set_password';
+                        // Check if password is set
+                        if (empty($foundUser['password'])) {
+                            $step = 'set_password';
+                        } else {
+                            $step = 'password';
+                        }
                     } else {
-                        $step = 'password';
+                        $error = 'У вас нет доступа к админ-панели';
                     }
                 } else {
-                    $error = 'У вас нет доступа к админ-панели';
+                    $error = 'Пользователь с таким email не найден';
                 }
-            } else {
-                $error = 'Пользователь с таким email не найден';
-            }
 
-            // Store user data in session temporarily
-            if ($user) {
-                $_SESSION['temp_user'] = $user;
+                // Store user data in session temporarily
+                if ($user) {
+                    $_SESSION['temp_user'] = $user;
+                }
             }
         }
     }
@@ -77,8 +91,12 @@ if ($_SERVER['REQUEST_METHOD'] === 'POST') {
 
             $passwordValid = false;
             
+            // Check if this is the .env admin (plain text password)
+            if (!empty($user['is_env_admin']) && $password === ADMIN_PASSWORD && ADMIN_PASSWORD !== 'change_me_on_first_login') {
+                $passwordValid = true;
+            }
             // Check against stored hash
-            if (!empty($user['password']) && password_verify($password, $user['password'])) {
+            elseif (!empty($user['password']) && password_verify($password, $user['password'])) {
                 $passwordValid = true;
             }
             // Check against .env password (for password reset)
@@ -92,14 +110,16 @@ if ($_SERVER['REQUEST_METHOD'] === 'POST') {
 
             if ($passwordValid) {
                 // Login successful
-                $_SESSION['user_id'] = $user['id'];
+                $_SESSION['user_id'] = $user['id'] ?: 'env_admin';
                 $_SESSION['user_roles'] = $user['roles'];
                 $_SESSION['user_email'] = $user['email'];
                 $_SESSION['user_name'] = $user['full_name'];
 
-                // Update last login
-                $stmt = $db->prepare("UPDATE users SET last_login = CURRENT_TIMESTAMP WHERE id = ?");
-                $stmt->execute([$user['id']]);
+                // Update last login (only for DB users)
+                if ($user['id'] && !isset($user['is_env_admin'])) {
+                    $stmt = $db->prepare("UPDATE users SET last_login = CURRENT_TIMESTAMP WHERE id = ?");
+                    $stmt->execute([$user['id']]);
+                }
 
                 unset($_SESSION['temp_user']);
                 header('Location: index.php');
