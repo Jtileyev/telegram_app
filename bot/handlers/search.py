@@ -24,7 +24,7 @@ class SearchStates(StatesGroup):
 
 
 @router.message(F.text.in_([
-    "🔍 Поиск квартир", "🔍 Пәтер іздеу"
+    "🔍 Поиск", "🔍 Іздеу"
 ]))
 async def handle_search(message: Message, state: FSMContext):
     """Handle search button"""
