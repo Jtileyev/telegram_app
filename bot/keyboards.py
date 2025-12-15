@@ -253,6 +253,32 @@ def get_booking_confirmed_keyboard(booking_id: int, lang: str = 'ru'):
     ]
     return InlineKeyboardMarkup(inline_keyboard=buttons)
 
+
+def get_booking_created_keyboard(booking_id: int, landlord_telegram_id: int = None, lang: str = 'ru'):
+    """Booking created keyboard with optional landlord contact button"""
+    buttons = []
+    
+    # Add "Write to landlord" button only if landlord has telegram_id
+    if landlord_telegram_id:
+        buttons.append([InlineKeyboardButton(
+            text=get_text('btn_write_landlord', lang),
+            url=f"tg://user?id={landlord_telegram_id}"
+        )])
+    
+    # Booking details button
+    buttons.append([InlineKeyboardButton(
+        text=get_text('btn_booking_details', lang),
+        callback_data=f"booking_details_{booking_id}"
+    )])
+    
+    # Cancel booking button
+    buttons.append([InlineKeyboardButton(
+        text=get_text('btn_cancel_booking', lang),
+        callback_data=f"cancel_booking_{booking_id}"
+    )])
+    
+    return InlineKeyboardMarkup(inline_keyboard=buttons) if buttons else None
+
 def get_cancel_booking_keyboard(booking_id: int, lang: str = 'ru'):
     """Cancel booking confirmation keyboard"""
     buttons = [

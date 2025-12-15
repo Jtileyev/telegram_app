@@ -10,7 +10,7 @@ from aiogram.fsm.state import State, StatesGroup
 import database as db
 from keyboards import (
     get_main_menu_keyboard, get_calendar_keyboard, get_contact_keyboard,
-    get_cancel_booking_keyboard
+    get_cancel_booking_keyboard, get_booking_created_keyboard
 )
 from locales import get_text
 from logger import setup_logger, get_audit_logger, log_booking_action, log_error
@@ -155,9 +155,19 @@ async def create_booking_request(message: Message, state: FSMContext, user: dict
             f"Apartment {apartment_id}, Total: {total_price}{PRICE_CURRENCY}, Dates: {filters['check_in']} to {filters['check_out']}"
         )
 
+        # Get landlord telegram_id for the keyboard
+        landlord_telegram_id = apartment.get('landlord_telegram_id')
+        keyboard = get_booking_created_keyboard(booking_id, landlord_telegram_id, lang)
+
         await message.answer(
             confirmation_text,
             parse_mode="Markdown",
+            reply_markup=keyboard
+        )
+        
+        # Also send main menu
+        await message.answer(
+            get_text('actions_prompt', lang),
             reply_markup=get_main_menu_keyboard(lang)
         )
 
