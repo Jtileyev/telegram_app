@@ -50,10 +50,20 @@ async def calendar_navigation(callback: CallbackQuery, state: FSMContext):
 async def select_date(callback: CallbackQuery, state: FSMContext):
     """Handle date selection"""
     from .booking import BookingStates, create_booking_request
-    
-    parts = callback.data.split("_")
-    calendar_type = parts[1]  # check_in or check_out
-    date_str = parts[2]
+    # Parse: date_check_in_2025-12-17 or date_check_out_2025-12-17
+    # Split only first part, then extract type and date
+    _, rest = callback.data.split("_", 1)  # rest = "check_in_2025-12-17"
+    if rest.startswith("check_in_"):
+        calendar_type = "check_in"
+        date_str = rest[9:]  # Remove "check_in_"
+    elif rest.startswith("check_out_"):
+        calendar_type = "check_out"
+        date_str = rest[10:]  # Remove "check_out_"
+    else:
+        # Fallback for unexpected format
+        parts = callback.data.split("_")
+        calendar_type = parts[1]
+        date_str = parts[-1]
 
     telegram_id = callback.from_user.id
     user = db.get_user(telegram_id)
@@ -65,10 +75,6 @@ async def select_date(callback: CallbackQuery, state: FSMContext):
     await state.update_data(filters=filters)
 
     current_state = await state.get_state()
-
-    # Debug logging
-    import logging
-    logging.getLogger('calendar').info(f"current_state={current_state}, expected={BookingStates.confirming.state}, match={current_state == BookingStates.confirming.state}")
 
     # If we're in booking flow
     if current_state == BookingStates.confirming.state:
