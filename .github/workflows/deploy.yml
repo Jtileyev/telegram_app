@@ -1,0 +1,108 @@
+name: Deploy to VDS
+
+on:
+  push:
+    branches: [main]
+  workflow_dispatch:  # Позволяет запускать вручную
+
+jobs:
+  test:
+    name: Run Tests
+    runs-on: ubuntu-latest
+    
+    steps:
+      - uses: actions/checkout@v4
+      
+      - name: Set up Python
+        uses: actions/setup-python@v5
+        with:
+          python-version: '3.11'
+          cache: 'pip'
+      
+      - name: Install dependencies
+        run: |
+          python -m pip install --upgrade pip
+          pip install -r requirements.txt
+      
+      - name: Run tests
+        run: |
+          cd bot
+          python -m pytest tests.py -v --tb=short
+        env:
+          DATABASE_PATH: ":memory:"
+
+  deploy:
+    name: Deploy to Server
+    runs-on: ubuntu-latest
+    needs: test  # Деплой только после успешных тестов
+    if: github.ref == 'refs/heads/main'
+    
+    steps:
+      - uses: actions/checkout@v4
+      
+      - name: Deploy via SSH
+        uses: appleboy/ssh-action@v1.0.3
+        with:
+          host: ${{ secrets.VDS_HOST }}
+          username: ${{ secrets.VDS_USER }}
+          key: ${{ secrets.VDS_SSH_KEY }}
+          port: ${{ secrets.VDS_PORT || 22 }}
+          script: |
+            set -e
+            
+            # Переменные
+            APP_DIR="${{ secrets.APP_DIR || '/var/www/astavaisya' }}"
+            REPO_URL="https://github.com/${{ github.repository }}.git"
+            
+            echo "📦 Deploying to $APP_DIR..."
+            
+            # Создаём директорию если нет
+            mkdir -p $APP_DIR
+            cd $APP_DIR
+            
+            # Первый деплой или обновление
+            if [ -d ".git" ]; then
+              echo "🔄 Pulling latest changes..."
+              git fetch origin main
+              git reset --hard origin/main
+            else
+              echo "📥 Cloning repository..."
+              git clone $REPO_URL .
+            fi
+            
+            # Python окружение
+            echo "🐍 Setting up Python environment..."
+            if [ ! -d "venv" ]; then
+              python3 -m venv venv
+            fi
+            source venv/bin/activate
+            pip install -q -r requirements.txt
+            
+            # Проверяем .env
+            if [ ! -f ".env" ]; then
+              echo "⚠️ .env not found! Copy from .env.example and configure manually"
+              cp .env.example .env
+            fi
+            
+            # Миграции БД (если нужно)
+            if [ -f "database/apply_promotions_migration.py" ]; then
+              echo "🗄️ Running migrations..."
+              python database/apply_promotions_migration.py || true
+            fi
+            
+            # Перезапуск бота через systemd
+            echo "🤖 Restarting bot service..."
+            sudo systemctl restart astavaisya-bot || echo "⚠️ Bot service not configured"
+            
+            # Перезапуск PHP-FPM (если используется)
+            sudo systemctl reload php8.1-fpm || sudo systemctl reload php-fpm || true
+            
+            echo "✅ Deployment complete!"
+
+      - name: Notify on success
+        if: success()
+        run: echo "✅ Deployment successful!"
+      
+      - name: Notify on failure
+        if: failure()
+        run: echo "❌ Deployment failed!"
