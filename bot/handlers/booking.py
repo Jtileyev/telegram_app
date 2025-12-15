@@ -118,8 +118,8 @@ async def create_booking_request(message: Message, state: FSMContext, user: dict
             filters['check_in'], filters['check_out']
         )
 
-    # Calculate platform fee using service
-    platform_fee = booking_service.get_platform_fee(total_price)
+    # Calculate platform fee using service (pass landlord_id for admin check)
+    platform_fee = booking_service.get_platform_fee(total_price, apartment['landlord_id'])
 
     try:
         booking_id = db.create_booking(

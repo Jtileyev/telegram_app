@@ -25,8 +25,28 @@ $stats['bookings'] = $stmt->fetch()['count'];
 $stmt = $db->query("SELECT COUNT(*) as count FROM bookings WHERE status = 'pending'");
 $stats['pending'] = $stmt->fetch()['count'];
 
-// Total revenue (platform fees)
-$stmt = $db->query("SELECT COALESCE(SUM(platform_fee), 0) as total FROM bookings WHERE status = 'completed'");
+// Total revenue (platform fees) - check if we should exclude admin landlords
+$chargeAdmins = '0';
+$stmt = $db->prepare("SELECT value FROM settings WHERE key = 'charge_fee_for_admins'");
+$stmt->execute();
+$row = $stmt->fetch();
+if ($row) {
+    $chargeAdmins = $row['value'];
+}
+
+if ($chargeAdmins === '0') {
+    // Exclude bookings where landlord is admin
+    $stmt = $db->query("
+        SELECT COALESCE(SUM(b.platform_fee), 0) as total 
+        FROM bookings b
+        JOIN users u ON b.landlord_id = u.id
+        WHERE b.status = 'completed' 
+        AND u.roles NOT LIKE '%admin%'
+    ");
+} else {
+    // Include all bookings
+    $stmt = $db->query("SELECT COALESCE(SUM(platform_fee), 0) as total FROM bookings WHERE status = 'completed'");
+}
 $stats['revenue'] = $stmt->fetch()['total'];
 
 // Total landlords (users with landlord role)

@@ -82,7 +82,25 @@ class BookingService:
         return db.check_apartment_availability(apartment_id, check_in, check_out)
 
     @staticmethod
-    def get_platform_fee(total_price: float) -> float:
-        """Calculate platform fee"""
+    def get_platform_fee(total_price: float, landlord_id: int = None) -> float:
+        """Calculate platform fee
+        
+        If landlord is an admin and charge_fee_for_admins setting is '0',
+        returns 0 (no fee charged for admin apartments).
+        """
+        # Check if we should skip fee for admin landlords
+        if landlord_id:
+            charge_for_admins = db.get_setting('charge_fee_for_admins') or '0'
+            if charge_for_admins == '0':
+                landlord = db.get_user_by_id(landlord_id)
+                if landlord and landlord.get('roles'):
+                    import json
+                    try:
+                        roles = json.loads(landlord['roles']) if isinstance(landlord['roles'], str) else landlord['roles']
+                        if 'admin' in roles:
+                            return 0.0
+                    except (json.JSONDecodeError, TypeError):
+                        pass
+        
         fee_percent = float(db.get_setting('platform_fee_percent') or 5)
         return total_price * (fee_percent / 100)
