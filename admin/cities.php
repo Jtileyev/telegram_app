@@ -28,17 +28,35 @@ if (isset($_POST['add_district'])) {
 
 // Handle delete
 if (isset($_GET['delete_city']) && is_numeric($_GET['delete_city'])) {
-    $stmt = $db->prepare("DELETE FROM cities WHERE id = ?");
+    // Проверяем, есть ли квартиры в этом городе
+    $stmt = $db->prepare("SELECT COUNT(*) as cnt FROM apartments WHERE city_id = ?");
     $stmt->execute([$_GET['delete_city']]);
-    setFlash('success', 'Город удален');
+    $count = $stmt->fetch()['cnt'];
+    
+    if ($count > 0) {
+        setFlash('danger', 'Невозможно удалить город: в нем есть ' . $count . ' квартир(а)');
+    } else {
+        $stmt = $db->prepare("DELETE FROM cities WHERE id = ?");
+        $stmt->execute([$_GET['delete_city']]);
+        setFlash('success', 'Город удален');
+    }
     header('Location: cities.php');
     exit;
 }
 
 if (isset($_GET['delete_district']) && is_numeric($_GET['delete_district'])) {
-    $stmt = $db->prepare("DELETE FROM districts WHERE id = ?");
+    // Проверяем, есть ли квартиры в этом районе
+    $stmt = $db->prepare("SELECT COUNT(*) as cnt FROM apartments WHERE district_id = ?");
     $stmt->execute([$_GET['delete_district']]);
-    setFlash('success', 'Район удален');
+    $count = $stmt->fetch()['cnt'];
+    
+    if ($count > 0) {
+        setFlash('danger', 'Невозможно удалить район: в нем есть ' . $count . ' квартир(а)');
+    } else {
+        $stmt = $db->prepare("DELETE FROM districts WHERE id = ?");
+        $stmt->execute([$_GET['delete_district']]);
+        setFlash('success', 'Район удален');
+    }
     header('Location: cities.php');
     exit;
 }
