@@ -90,6 +90,12 @@ jobs:
               python database/apply_promotions_migration.py || true
             fi
             
+            # Обновляем nginx конфиг
+            echo "🌐 Updating nginx config..."
+            sudo cp nginx/astavaisya.conf /etc/nginx/sites-available/astavaisya
+            sudo ln -sf /etc/nginx/sites-available/astavaisya /etc/nginx/sites-enabled/
+            sudo nginx -t && sudo systemctl reload nginx
+            
             # Перезапуск бота через systemd
             echo "🤖 Restarting bot service..."
             sudo systemctl restart astavaisya-bot || echo "⚠️ Bot service not configured"
