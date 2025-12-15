@@ -167,7 +167,7 @@ async def create_booking_request(message: Message, state: FSMContext, user: dict
         
         # Also send main menu
         await message.answer(
-            get_text('actions_prompt', lang),
+            "⬇️",
             reply_markup=get_main_menu_keyboard(lang)
         )
 
