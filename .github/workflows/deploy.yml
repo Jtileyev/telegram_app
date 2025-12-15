@@ -83,8 +83,8 @@ jobs:
             if [ ! -d "venv" ]; then
               python3 -m venv venv
             fi
-            source venv/bin/activate
-            pip install -q -r requirements.txt
+            # Use explicit venv paths (source doesn't work in ssh-action shell)
+            ./venv/bin/pip install -q -r requirements.txt
             
             # Проверяем .env
             if [ ! -f ".env" ]; then
@@ -95,7 +95,7 @@ jobs:
             # Миграции БД (если нужно)
             if [ -f "database/apply_promotions_migration.py" ]; then
               echo "🗄️ Running migrations..."
-              python database/apply_promotions_migration.py || true
+              ./venv/bin/python database/apply_promotions_migration.py || true
             fi
             
             # Обновляем nginx конфиг ТОЛЬКО если его ещё нет (чтобы не затереть SSL настройки от certbot)
