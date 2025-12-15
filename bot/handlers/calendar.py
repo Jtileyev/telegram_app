@@ -66,6 +66,10 @@ async def select_date(callback: CallbackQuery, state: FSMContext):
 
     current_state = await state.get_state()
 
+    # Debug logging
+    import logging
+    logging.getLogger('calendar').info(f"current_state={current_state}, expected={BookingStates.confirming.state}, match={current_state == BookingStates.confirming.state}")
+
     # If we're in booking flow
     if current_state == BookingStates.confirming.state:
         if calendar_type == 'check_in':
