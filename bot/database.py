@@ -238,11 +238,15 @@ def get_apartments(city_id: int = None, district_id: int = None) -> List[Dict[st
     query = """
         SELECT a.*, u.phone as landlord_phone, u.full_name as landlord_name,
                c.name_ru as city_name_ru, c.name_kk as city_name_kk,
-               d.name_ru as district_name_ru, d.name_kk as district_name_kk
+               d.name_ru as district_name_ru, d.name_kk as district_name_kk,
+               p.name as promotion_name, p.description as promotion_description,
+               p.bookings_required as promotion_bookings_required,
+               p.free_days as promotion_free_days, p.is_active as promotion_active
         FROM apartments a
         JOIN users u ON a.landlord_id = u.id
         JOIN cities c ON a.city_id = c.id
         JOIN districts d ON a.district_id = d.id
+        LEFT JOIN promotions p ON a.promotion_id = p.id AND p.is_active = 1
         WHERE a.is_active = 1 AND u.is_active = 1
     """
     params = []
@@ -547,12 +551,16 @@ def get_user_favorites(user_id: int) -> List[Dict[str, Any]]:
     cursor = conn.execute("""
         SELECT a.*, u.phone as landlord_phone, u.full_name as landlord_name,
                c.name_ru as city_name_ru, c.name_kk as city_name_kk,
-               d.name_ru as district_name_ru, d.name_kk as district_name_kk
+               d.name_ru as district_name_ru, d.name_kk as district_name_kk,
+               p.name as promotion_name, p.description as promotion_description,
+               p.bookings_required as promotion_bookings_required,
+               p.free_days as promotion_free_days, p.is_active as promotion_active
         FROM favorites f
         JOIN apartments a ON f.apartment_id = a.id
         JOIN users u ON a.landlord_id = u.id
         JOIN cities c ON a.city_id = c.id
         JOIN districts d ON a.district_id = d.id
+        LEFT JOIN promotions p ON a.promotion_id = p.id AND p.is_active = 1
         WHERE f.user_id = ?
         ORDER BY f.created_at DESC
     """, (user_id,))
