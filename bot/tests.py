@@ -16,6 +16,7 @@ class TestDatabase(unittest.TestCase):
     @classmethod
     def setUpClass(cls):
         """Initialize test database"""
+        import sqlite3
         # Use separate test database
         test_db_path = Path(__file__).parent.parent / 'database' / 'rental_test.db'
 
@@ -28,6 +29,16 @@ class TestDatabase(unittest.TestCase):
 
         # Initialize fresh test database
         db.init_db()
+        
+        # Add test data (cities and districts)
+        conn = sqlite3.connect(test_db_path)
+        cursor = conn.cursor()
+        cursor.execute("INSERT INTO cities (name_ru, name_kk) VALUES ('Алматы', 'Алматы')")
+        city_id = cursor.lastrowid
+        cursor.execute("INSERT INTO districts (city_id, name_ru, name_kk) VALUES (?, 'Алмалинский', 'Алмалы')", (city_id,))
+        cursor.execute("INSERT INTO districts (city_id, name_ru, name_kk) VALUES (?, 'Бостандыкский', 'Бостандық')", (city_id,))
+        conn.commit()
+        conn.close()
 
     @classmethod
     def tearDownClass(cls):
