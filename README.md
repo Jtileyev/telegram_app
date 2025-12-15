@@ -302,3 +302,4 @@ pytest --cov=bot bot/tests.py
 ## 📄 Лицензия
 
 MIT License
+1
