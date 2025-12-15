@@ -104,6 +104,19 @@ jobs:
             sudo ln -sf /etc/nginx/sites-available/astavaisya /etc/nginx/sites-enabled/
             sudo nginx -t && sudo systemctl reload nginx
             
+            # SSL сертификат (только если домен резолвится и сертификата ещё нет)
+            DOMAIN="actavaysa.kz"
+            if host $DOMAIN > /dev/null 2>&1; then
+              if [ ! -d "/etc/letsencrypt/live/$DOMAIN" ]; then
+                echo "🔒 Obtaining SSL certificate..."
+                sudo certbot --nginx -d $DOMAIN -d www.$DOMAIN --non-interactive --agree-tos --email ${{ secrets.ADMIN_EMAIL }} || echo "⚠️ SSL setup failed (maybe DNS not ready)"
+              else
+                echo "🔒 SSL certificate already exists"
+              fi
+            else
+              echo "⏳ Domain not resolving yet, skipping SSL"
+            fi
+            
             # Перезапуск бота через systemd
             echo "🤖 Restarting bot service..."
             sudo systemctl restart astavaisya-bot || echo "⚠️ Bot service not configured"
