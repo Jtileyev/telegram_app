@@ -8,6 +8,7 @@ $db = getDB();
 
 // Handle city add
 if (isset($_POST['add_city'])) {
+    requireCSRF();
     $stmt = $db->prepare("INSERT INTO cities (name_ru, name_kk) VALUES (?, ?)");
     $stmt->execute([$_POST['city_name_ru'], $_POST['city_name_kk']]);
     setFlash('success', 'Город добавлен');
@@ -17,6 +18,7 @@ if (isset($_POST['add_city'])) {
 
 // Handle district add
 if (isset($_POST['add_district'])) {
+    requireCSRF();
     $stmt = $db->prepare("INSERT INTO districts (city_id, name_ru, name_kk) VALUES (?, ?, ?)");
     $stmt->execute([$_POST['city_id'], $_POST['district_name_ru'], $_POST['district_name_kk']]);
     setFlash('success', 'Район добавлен');
@@ -54,6 +56,7 @@ include 'header.php';
             </div>
             <div class="card-body">
                 <form method="POST">
+                    <?= csrfField() ?>
                     <div class="mb-3">
                         <input type="text" name="city_name_ru" class="form-control"
                                placeholder="Название (Русский)" required>
@@ -74,6 +77,7 @@ include 'header.php';
             </div>
             <div class="card-body">
                 <form method="POST">
+                    <?= csrfField() ?>
                     <div class="mb-3">
                         <select name="city_id" class="form-select" required>
                             <option value="">Выберите город</option>

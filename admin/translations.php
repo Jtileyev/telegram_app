@@ -8,6 +8,7 @@ $db = getDB();
 
 // Handle translation update
 if ($_SERVER['REQUEST_METHOD'] === 'POST' && isset($_POST['update_translation'])) {
+    requireCSRF();
     $key = $_POST['key'];
     $text_ru = $_POST['text_ru'];
     $text_kk = $_POST['text_kk'];
@@ -212,6 +213,7 @@ include 'header.php';
                         <div class="modal-dialog modal-lg">
                             <div class="modal-content">
                                 <form method="POST">
+                                    <?= csrfField() ?>
                                     <div class="modal-header">
                                         <h5 class="modal-title">
                                             <i class="bi bi-pencil me-2"></i>Редактирование перевода

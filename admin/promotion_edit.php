@@ -37,6 +37,7 @@ if ($promotion) {
 }
 
 if ($_SERVER['REQUEST_METHOD'] === 'POST') {
+    requireCSRF();
     $name = trim($_POST['name']);
     $description = trim($_POST['description']) ?: null;
     $bookings_required = (int)$_POST['bookings_required'];
@@ -115,6 +116,7 @@ if ($flash):
             </div>
             <div class="card-body">
                 <form method="POST">
+                    <?= csrfField() ?>
                     <div class="mb-3">
                         <label class="form-label">Название акции *</label>
                         <input type="text" name="name" class="form-control" required

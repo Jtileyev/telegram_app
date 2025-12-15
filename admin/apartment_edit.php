@@ -16,6 +16,7 @@ if (isset($_GET['id'])) {
 
 // Handle form submission
 if ($_SERVER['REQUEST_METHOD'] === 'POST') {
+    requireCSRF();
     $landlord_id = $_POST['landlord_id'];
     $city_id = $_POST['city_id'];
     $district_id = $_POST['district_id'];
@@ -106,6 +107,7 @@ include 'header.php';
 <div class="card">
     <div class="card-body">
         <form method="POST" enctype="multipart/form-data">
+            <?= csrfField() ?>
             <div class="row">
                 <div class="col-md-6">
                     <div class="mb-3">

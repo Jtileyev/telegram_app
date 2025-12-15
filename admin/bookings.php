@@ -8,6 +8,7 @@ $db = getDB();
 
 // Handle status update
 if (isset($_POST['update_status'])) {
+    requireCSRF();
     $booking_id = $_POST['booking_id'];
     $new_status = $_POST['status'];
 
@@ -212,6 +213,7 @@ include 'header.php';
                         </td>
                         <td>
                             <form method="POST" class="d-inline">
+                                <?= csrfField() ?>
                                 <input type="hidden" name="booking_id" value="<?= $booking['id'] ?>">
                                 <select name="status" class="form-select form-select-sm mb-1" style="width: 140px;">
                                     <option value="pending" <?= $booking['status'] === 'pending' ? 'selected' : '' ?>>Ожидает</option>

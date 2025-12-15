@@ -6,17 +6,65 @@ $pageTitle = 'Отзывы';
 
 $db = getDB();
 
-// Handle visibility toggle
-if (isset($_GET['toggle_visibility']) && is_numeric($_GET['toggle_visibility'])) {
-    $stmt = $db->prepare("UPDATE reviews SET is_visible = NOT is_visible WHERE id = ?");
-    $stmt->execute([$_GET['toggle_visibility']]);
-    setFlash('success', 'Видимость отзыва изменена');
-    header('Location: reviews.php');
+// Handle approve review
+if (isset($_GET['approve']) && is_numeric($_GET['approve'])) {
+    $review_id = $_GET['approve'];
+    
+    // Get review and apartment info
+    $stmt = $db->prepare("SELECT apartment_id FROM reviews WHERE id = ?");
+    $stmt->execute([$review_id]);
+    $review = $stmt->fetch();
+    
+    if ($review) {
+        // Approve review
+        $stmt = $db->prepare("UPDATE reviews SET is_visible = 1, moderation_status = 'approved', updated_at = CURRENT_TIMESTAMP WHERE id = ?");
+        $stmt->execute([$review_id]);
+        
+        // Update apartment rating
+        $stmt = $db->prepare("SELECT AVG(rating) as avg_rating, COUNT(*) as count FROM reviews WHERE apartment_id = ? AND is_visible = 1");
+        $stmt->execute([$review['apartment_id']]);
+        $row = $stmt->fetch();
+        
+        $stmt = $db->prepare("UPDATE apartments SET rating = ?, reviews_count = ? WHERE id = ?");
+        $stmt->execute([round($row['avg_rating'], 1), $row['count'], $review['apartment_id']]);
+        
+        setFlash('success', 'Отзыв одобрен');
+    }
+    header('Location: reviews.php' . (isset($_GET['filter']) ? '?filter=' . $_GET['filter'] : ''));
+    exit;
+}
+
+// Handle reject review
+if (isset($_GET['reject']) && is_numeric($_GET['reject'])) {
+    $review_id = $_GET['reject'];
+    
+    // Get review and apartment info
+    $stmt = $db->prepare("SELECT apartment_id FROM reviews WHERE id = ?");
+    $stmt->execute([$review_id]);
+    $review = $stmt->fetch();
+    
+    if ($review) {
+        // Reject review
+        $stmt = $db->prepare("UPDATE reviews SET is_visible = 0, moderation_status = 'rejected', updated_at = CURRENT_TIMESTAMP WHERE id = ?");
+        $stmt->execute([$review_id]);
+        
+        // Update apartment rating (recalculate without this review)
+        $stmt = $db->prepare("SELECT AVG(rating) as avg_rating, COUNT(*) as count FROM reviews WHERE apartment_id = ? AND is_visible = 1");
+        $stmt->execute([$review['apartment_id']]);
+        $row = $stmt->fetch();
+        
+        $stmt = $db->prepare("UPDATE apartments SET rating = ?, reviews_count = ? WHERE id = ?");
+        $stmt->execute([round($row['avg_rating'] ?? 0, 1), $row['count'], $review['apartment_id']]);
+        
+        setFlash('warning', 'Отзыв отклонён');
+    }
+    header('Location: reviews.php' . (isset($_GET['filter']) ? '?filter=' . $_GET['filter'] : ''));
     exit;
 }
 
 // Handle landlord reply
 if (isset($_POST['save_reply'])) {
+    requireCSRF();
     $review_id = $_POST['review_id'];
     $reply = trim($_POST['landlord_reply']);
     
@@ -27,12 +75,23 @@ if (isset($_POST['save_reply'])) {
     exit;
 }
 
+// Filter
+$filter = $_GET['filter'] ?? 'all';
+$filterCondition = '';
+if ($filter === 'pending') {
+    $filterCondition = " AND (r.moderation_status = 'pending' OR r.moderation_status IS NULL)";
+} elseif ($filter === 'approved') {
+    $filterCondition = " AND r.moderation_status = 'approved'";
+} elseif ($filter === 'rejected') {
+    $filterCondition = " AND r.moderation_status = 'rejected'";
+}
+
 $query = "
     SELECT r.*, u.full_name as user_name, a.title_ru as apartment_title, a.address
     FROM reviews r
     JOIN users u ON r.user_id = u.id
     JOIN apartments a ON r.apartment_id = a.id
-    WHERE 1=1
+    WHERE 1=1 $filterCondition
 ";
 
 // Filter by landlord if not admin
@@ -46,8 +105,34 @@ if (isLandlord() && !isAdmin()) {
 
 $reviews = $stmt->fetchAll();
 
+// Count by status
+$countQuery = "SELECT moderation_status, COUNT(*) as cnt FROM reviews GROUP BY moderation_status";
+$counts = ['all' => 0, 'pending' => 0, 'approved' => 0, 'rejected' => 0];
+foreach ($db->query($countQuery)->fetchAll() as $row) {
+    $status = $row['moderation_status'] ?? 'pending';
+    $counts[$status] = $row['cnt'];
+    $counts['all'] += $row['cnt'];
+}
+
 include 'header.php';
 ?>
+
+<div class="mb-4">
+    <div class="btn-group" role="group">
+        <a href="?filter=all" class="btn btn-<?= $filter === 'all' ? 'primary' : 'outline-primary' ?>">
+            Все <span class="badge bg-secondary"><?= $counts['all'] ?></span>
+        </a>
+        <a href="?filter=pending" class="btn btn-<?= $filter === 'pending' ? 'warning' : 'outline-warning' ?>">
+            На модерации <span class="badge bg-secondary"><?= $counts['pending'] ?></span>
+        </a>
+        <a href="?filter=approved" class="btn btn-<?= $filter === 'approved' ? 'success' : 'outline-success' ?>">
+            Одобренные <span class="badge bg-secondary"><?= $counts['approved'] ?></span>
+        </a>
+        <a href="?filter=rejected" class="btn btn-<?= $filter === 'rejected' ? 'danger' : 'outline-danger' ?>">
+            Отклонённые <span class="badge bg-secondary"><?= $counts['rejected'] ?></span>
+        </a>
+    </div>
+</div>
 
 <div class="card">
     <div class="card-body">
@@ -64,7 +149,7 @@ include 'header.php';
                         <th>Рейтинг</th>
                         <th>Комментарий</th>
                         <th>Дата</th>
-                        <th>Видимость</th>
+                        <th>Статус</th>
                         <th>Действия</th>
                     </tr>
                 </thead>
@@ -101,17 +186,46 @@ include 'header.php';
                         </td>
                         <td><?= date('d.m.Y H:i', strtotime($review['created_at'])) ?></td>
                         <td>
-                            <?php if ($review['is_visible']): ?>
-                            <span class="badge bg-success">Виден</span>
-                            <?php else: ?>
-                            <span class="badge bg-danger">Скрыт</span>
-                            <?php endif; ?>
+                            <?php
+                            $status = $review['moderation_status'] ?? 'pending';
+                            $statusClasses = [
+                                'pending' => 'warning',
+                                'approved' => 'success',
+                                'rejected' => 'danger'
+                            ];
+                            $statusLabels = [
+                                'pending' => 'На модерации',
+                                'approved' => 'Одобрен',
+                                'rejected' => 'Отклонён'
+                            ];
+                            ?>
+                            <span class="badge bg-<?= $statusClasses[$status] ?? 'secondary' ?>">
+                                <?= $statusLabels[$status] ?? $status ?>
+                            </span>
                         </td>
                         <td>
-                            <a href="?toggle_visibility=<?= $review['id'] ?>"
-                               class="btn btn-sm btn-outline-warning" title="Переключить видимость">
-                                <i class="bi bi-eye"></i>
+                            <?php if ($status === 'pending'): ?>
+                            <a href="?approve=<?= $review['id'] ?>&filter=<?= $filter ?>"
+                               class="btn btn-sm btn-success" title="Одобрить">
+                                <i class="bi bi-check-lg"></i>
                             </a>
+                            <a href="?reject=<?= $review['id'] ?>&filter=<?= $filter ?>"
+                               class="btn btn-sm btn-danger" title="Отклонить"
+                               onclick="return confirm('Отклонить этот отзыв?')">
+                                <i class="bi bi-x-lg"></i>
+                            </a>
+                            <?php elseif ($status === 'approved'): ?>
+                            <a href="?reject=<?= $review['id'] ?>&filter=<?= $filter ?>"
+                               class="btn btn-sm btn-outline-danger" title="Отклонить"
+                               onclick="return confirm('Отклонить этот отзыв?')">
+                                <i class="bi bi-x-lg"></i>
+                            </a>
+                            <?php elseif ($status === 'rejected'): ?>
+                            <a href="?approve=<?= $review['id'] ?>&filter=<?= $filter ?>"
+                               class="btn btn-sm btn-outline-success" title="Одобрить">
+                                <i class="bi bi-check-lg"></i>
+                            </a>
+                            <?php endif; ?>
                             <button type="button" class="btn btn-sm btn-outline-primary"
                                     data-bs-toggle="modal" data-bs-target="#replyModal<?= $review['id'] ?>"
                                     title="Ответить">
@@ -125,6 +239,7 @@ include 'header.php';
                         <div class="modal-dialog">
                             <div class="modal-content">
                                 <form method="POST">
+                                    <?= csrfField() ?>
                                     <div class="modal-header">
                                         <h5 class="modal-title">Ответ на отзыв #<?= $review['id'] ?></h5>
                                         <button type="button" class="btn-close" data-bs-dismiss="modal"></button>

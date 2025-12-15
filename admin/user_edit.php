@@ -21,6 +21,7 @@ if (!$user && isset($_GET['id'])) {
 }
 
 if ($_SERVER['REQUEST_METHOD'] === 'POST') {
+    requireCSRF();
     $telegram_id = $_POST['telegram_id'] ?: null;
     $email = $_POST['email'] ?: null;
     $username = $_POST['username'] ?: null;
@@ -91,6 +92,7 @@ include 'header.php';
 <div class="card">
     <div class="card-body">
         <form method="POST">
+            <?= csrfField() ?>
             <div class="row">
                 <div class="col-md-6">
                     <div class="mb-3">

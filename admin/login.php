@@ -18,10 +18,14 @@ $email = '';
 $user = null;
 
 if ($_SERVER['REQUEST_METHOD'] === 'POST') {
-    $db = getDB();
+    // CSRF check for login forms
+    if (!validateCSRFToken($_POST['csrf_token'] ?? '')) {
+        $error = 'Ошибка безопасности. Попробуйте снова.';
+    } else {
+        $db = getDB();
 
-    // Step 1: Check email
-    if (isset($_POST['check_email'])) {
+        // Step 1: Check email
+        if (isset($_POST['check_email'])) {
         $email = trim($_POST['email']);
 
         if (empty($email) || !filter_var($email, FILTER_VALIDATE_EMAIL)) {
@@ -71,7 +75,22 @@ if ($_SERVER['REQUEST_METHOD'] === 'POST') {
             $user = $_SESSION['temp_user'];
             $password = $_POST['password'];
 
-            if (password_verify($password, $user['password'])) {
+            $passwordValid = false;
+            
+            // Check against stored hash
+            if (!empty($user['password']) && password_verify($password, $user['password'])) {
+                $passwordValid = true;
+            }
+            // Check against .env password (for password reset)
+            elseif ($user['email'] === ADMIN_EMAIL && $password === ADMIN_PASSWORD && ADMIN_PASSWORD !== 'change_me_on_first_login') {
+                $passwordValid = true;
+                // Update password hash in database
+                $hashed = password_hash($password, PASSWORD_DEFAULT);
+                $stmt = $db->prepare("UPDATE users SET password = ? WHERE id = ?");
+                $stmt->execute([$hashed, $user['id']]);
+            }
+
+            if ($passwordValid) {
                 // Login successful
                 $_SESSION['user_id'] = $user['id'];
                 $_SESSION['user_roles'] = $user['roles'];
@@ -133,6 +152,7 @@ if ($_SERVER['REQUEST_METHOD'] === 'POST') {
             exit;
         }
     }
+    } // end CSRF else
 }
 
 // Get user data if in password step
@@ -179,6 +199,7 @@ if (($step === 'password' || $step === 'set_password') && isset($_SESSION['temp_
                 <?php if ($step === 'email'): ?>
                 <!-- Step 1: Email -->
                 <form method="POST">
+                    <?= csrfField() ?>
                     <div class="mb-3">
                         <label for="email" class="form-label">Email</label>
                         <input type="email" class="form-control" id="email" name="email"
@@ -196,6 +217,7 @@ if (($step === 'password' || $step === 'set_password') && isset($_SESSION['temp_
                 </div>
 
                 <form method="POST">
+                    <?= csrfField() ?>
                     <div class="mb-3">
                         <label for="password" class="form-label">Пароль</label>
                         <input type="password" class="form-control" id="password" name="password" required autofocus>
@@ -221,6 +243,7 @@ if (($step === 'password' || $step === 'set_password') && isset($_SESSION['temp_
                 </div>
 
                 <form method="POST">
+                    <?= csrfField() ?>
                     <div class="mb-3">
                         <label for="new_password" class="form-label">Новый пароль</label>
                         <input type="password" class="form-control" id="new_password" name="new_password"

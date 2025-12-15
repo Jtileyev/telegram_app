@@ -15,6 +15,7 @@ if (isset($_GET['id'])) {
 }
 
 if ($_SERVER['REQUEST_METHOD'] === 'POST') {
+    requireCSRF();
     $full_name = $_POST['full_name'];
     $phone = $_POST['phone'];
     $email = $_POST['email'] ?: null;
@@ -68,6 +69,7 @@ include 'header.php';
 <div class="card">
     <div class="card-body">
         <form method="POST">
+            <?= csrfField() ?>
             <div class="row">
                 <div class="col-md-6">
                     <div class="mb-3">

@@ -611,27 +611,18 @@ def create_review(user_id: int, apartment_id: int, booking_id: int,
             raise ValueError(f"{key} rating must be an integer between {MIN_RATING} and {MAX_RATING}")
 
     conn = get_connection()
+    # New reviews require moderation (is_visible=0, moderation_status='pending')
     conn.execute("""
         INSERT INTO reviews (user_id, apartment_id, booking_id, rating, comment,
-                            cleanliness_rating, accuracy_rating, communication_rating, location_rating)
-        VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?)
+                            cleanliness_rating, accuracy_rating, communication_rating, location_rating,
+                            is_visible, moderation_status)
+        VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, 0, 'pending')
     """, (user_id, apartment_id, booking_id, rating, comment,
           criteria.get('cleanliness'), criteria.get('accuracy'),
           criteria.get('communication'), criteria.get('location')))
     conn.commit()
-
-    # Update apartment rating
-    cursor = conn.execute(
-        "SELECT AVG(rating) as avg_rating, COUNT(*) as count FROM reviews WHERE apartment_id = ? AND is_visible = 1",
-        (apartment_id,)
-    )
-    row = cursor.fetchone()
-    conn.execute(
-        "UPDATE apartments SET rating = ?, reviews_count = ? WHERE id = ?",
-        (round(row['avg_rating'], 1), row['count'], apartment_id)
-    )
-    conn.commit()
     conn.close()
+    # Note: apartment rating is updated when review is approved in admin panel
 
 def can_leave_review(user_id: int, booking_id: int) -> bool:
     """Check if user can leave review for booking"""

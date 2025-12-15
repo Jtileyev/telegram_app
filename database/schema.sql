@@ -135,7 +135,8 @@ CREATE TABLE IF NOT EXISTS reviews (
     landlord_reply TEXT,
     helpful_count INTEGER DEFAULT 0,
     not_helpful_count INTEGER DEFAULT 0,
-    is_visible BOOLEAN DEFAULT 1,
+    is_visible BOOLEAN DEFAULT 0,
+    moderation_status TEXT DEFAULT 'pending', -- pending, approved, rejected
     created_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP,
     updated_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP,
     FOREIGN KEY (user_id) REFERENCES users(id),

@@ -7,6 +7,7 @@ $pageTitle = 'Настройки';
 $db = getDB();
 
 if ($_SERVER['REQUEST_METHOD'] === 'POST') {
+    requireCSRF();
     foreach ($_POST as $key => $value) {
         if (strpos($key, 'setting_') === 0) {
             $settingKey = str_replace('setting_', '', $key);
@@ -28,6 +29,7 @@ include 'header.php';
 <div class="card">
     <div class="card-body">
         <form method="POST">
+            <?= csrfField() ?>
             <?php foreach ($settings as $setting): ?>
             <div class="mb-3">
                 <label class="form-label">

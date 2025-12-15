@@ -21,6 +21,7 @@ if (!$amenity && isset($_GET['id'])) {
 }
 
 if ($_SERVER['REQUEST_METHOD'] === 'POST') {
+    requireCSRF();
     $name_ru = trim($_POST['name_ru']);
     $name_kk = trim($_POST['name_kk']);
     $icon = trim($_POST['icon']) ?: null;
@@ -61,6 +62,7 @@ include 'header.php';
 <div class="card">
     <div class="card-body">
         <form method="POST">
+            <?= csrfField() ?>
             <div class="row">
                 <div class="col-md-6">
                     <div class="mb-3">
