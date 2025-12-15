@@ -53,26 +53,38 @@ echo -e "  ✓ uploads/apartments"
 echo -e "  ✓ logs"
 echo -e "  ✓ database"
 
-# 2. Установка владельца для всего проекта
-echo -e "${YELLOW}[2/5]${NC} Установка владельца файлов..."
+# Директории, которые НЕ нужно трогать (содержат бинарники с особыми правами)
+EXCLUDE_DIRS="-path $PROJECT_PATH/venv -prune -o -path $PROJECT_PATH/.git -prune -o -path $PROJECT_PATH/node_modules -prune -o"
 
-chown -R $WEB_USER:$WEB_GROUP "$PROJECT_PATH"
-echo -e "  ✓ Владелец установлен: $WEB_USER:$WEB_GROUP"
+# 2. Установка владельца для всего проекта (кроме venv)
+echo -e "${YELLOW}[2/6]${NC} Установка владельца файлов..."
+
+# Устанавливаем владельца только для нужных директорий
+for dir in admin bot database logs uploads scripts tasks; do
+    if [ -d "$PROJECT_PATH/$dir" ]; then
+        chown -R $WEB_USER:$WEB_GROUP "$PROJECT_PATH/$dir"
+    fi
+done
+chown $WEB_USER:$WEB_GROUP "$PROJECT_PATH"/*.sh 2>/dev/null
+chown $WEB_USER:$WEB_GROUP "$PROJECT_PATH"/*.py 2>/dev/null
+chown $WEB_USER:$WEB_GROUP "$PROJECT_PATH"/*.txt 2>/dev/null
+chown $WEB_USER:$WEB_GROUP "$PROJECT_PATH"/*.md 2>/dev/null
+echo -e "  ✓ Владелец установлен (venv, .git исключены)"
 
 # 3. Установка прав на директории (755 - rwxr-xr-x)
-echo -e "${YELLOW}[3/5]${NC} Установка прав на директории (755)..."
+echo -e "${YELLOW}[3/6]${NC} Установка прав на директории (755)..."
 
-find "$PROJECT_PATH" -type d -exec chmod 755 {} \;
-echo -e "  ✓ Все директории: 755"
+find "$PROJECT_PATH" $EXCLUDE_DIRS -type d -exec chmod 755 {} \;
+echo -e "  ✓ Все директории: 755 (venv, .git исключены)"
 
 # 4. Установка прав на файлы (644 - rw-r--r--)
-echo -e "${YELLOW}[4/5]${NC} Установка прав на файлы (644)..."
+echo -e "${YELLOW}[4/6]${NC} Установка прав на файлы (644)..."
 
-find "$PROJECT_PATH" -type f -exec chmod 644 {} \;
-echo -e "  ✓ Все файлы: 644"
+find "$PROJECT_PATH" $EXCLUDE_DIRS -type f -exec chmod 644 {} \;
+echo -e "  ✓ Все файлы: 644 (venv, .git исключены)"
 
 # 5. Установка прав на записываемые директории (775)
-echo -e "${YELLOW}[5/5]${NC} Установка прав на записываемые директории..."
+echo -e "${YELLOW}[5/6]${NC} Установка прав на записываемые директории..."
 
 # Uploads - для загрузки файлов
 chmod 775 "$PROJECT_PATH/uploads"
@@ -90,7 +102,11 @@ if [ -f "$PROJECT_PATH/database/rental.db" ]; then
     echo -e "  ✓ database/rental.db: 664"
 fi
 
-# Права на исполняемые скрипты
+# Права на исполняемые скрипты в корне проекта
+chmod +x "$PROJECT_PATH"/*.sh 2>/dev/null
+echo -e "  ✓ *.sh (корень): исполняемые"
+
+# Права на исполняемые скрипты в папке scripts
 if [ -d "$PROJECT_PATH/scripts" ]; then
     chmod +x "$PROJECT_PATH/scripts"/*.sh 2>/dev/null
     echo -e "  ✓ scripts/*.sh: исполняемые"
@@ -101,6 +117,17 @@ echo -e "  ✓ uploads/apartments/: 775"
 echo -e "  ✓ logs/: 775"
 echo -e "  ✓ database/: 775"
 
+# 6. Проверка и восстановление venv (если сломано)
+echo -e "${YELLOW}[6/6]${NC} Проверка виртуального окружения..."
+
+if [ -d "$PROJECT_PATH/venv" ]; then
+    # Восстановить права на бинарники venv
+    chmod +x "$PROJECT_PATH/venv/bin/"* 2>/dev/null
+    echo -e "  ✓ venv/bin/*: исполняемые"
+else
+    echo -e "  ⚠ venv не найден (пропущено)"
+fi
+
 echo ""
 echo -e "${GREEN}============================================${NC}"
 echo -e "${GREEN}  Права доступа успешно настроены!         ${NC}"
@@ -110,6 +137,6 @@ echo ""
 # Вывод итоговой информации
 echo -e "Проверка прав на ключевые директории:"
 echo ""
-ls -la "$PROJECT_PATH" | grep -E "uploads|logs|database"
+ls -la "$PROJECT_PATH" | grep -E "uploads|logs|database|venv"
 echo ""
 ls -la "$PROJECT_PATH/uploads/"

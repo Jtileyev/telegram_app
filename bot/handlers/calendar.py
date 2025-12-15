@@ -67,7 +67,7 @@ async def select_date(callback: CallbackQuery, state: FSMContext):
     current_state = await state.get_state()
 
     # If we're in booking flow
-    if current_state == BookingStates.confirming:
+    if current_state == BookingStates.confirming.state:
         if calendar_type == 'check_in':
             apartment_id = data.get('booking_apartment_id')
             check_in_date = datetime.strptime(date_str, "%Y-%m-%d")
