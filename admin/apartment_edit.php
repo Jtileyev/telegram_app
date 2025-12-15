@@ -243,12 +243,13 @@ include 'header.php';
                     <?php if ($apartment): ?>
                     <div class="mb-3">
                         <label class="form-label">Фотографии</label>
-                        <input type="file" id="photo_upload" class="form-control" accept="image/*">
-                        <small class="text-muted">Первая фотография будет главной. Максимум 5MB</small>
+                        <input type="file" id="photo_upload" class="form-control" accept="image/*" multiple>
+                        <small class="text-muted">Можно выбрать до 10 фотографий. Первая будет главной. Максимум 5MB каждая</small>
                         <div id="upload_progress" class="mt-2" style="display: none;">
                             <div class="progress">
-                                <div class="progress-bar progress-bar-striped progress-bar-animated" style="width: 100%">Загрузка...</div>
+                                <div class="progress-bar progress-bar-striped progress-bar-animated" id="progress_bar" style="width: 0%">Загрузка...</div>
                             </div>
+                            <small id="upload_status" class="text-muted"></small>
                         </div>
                     </div>
 
@@ -340,66 +341,104 @@ const photoUpload = document.getElementById('photo_upload');
 const uploadProgress = document.getElementById('upload_progress');
 const photosContainer = document.getElementById('photos_container');
 
+const MAX_FILES = 10;
+const progressBar = document.getElementById('progress_bar');
+const uploadStatus = document.getElementById('upload_status');
+
 if (photoUpload) {
-    photoUpload.addEventListener('change', function(e) {
-        const file = e.target.files[0];
-        if (!file) return;
-
-        const formData = new FormData();
-        formData.append('photo', file);
-        formData.append('apartment_id', <?= $apartment['id'] ?>);
-
-        uploadProgress.style.display = 'block';
-
-        fetch('upload_apartment_photo.php', {
-            method: 'POST',
-            body: formData
-        })
-        .then(response => response.json())
-        .then(data => {
-            uploadProgress.style.display = 'none';
-
-            if (data.success) {
-                // Add new photo to container
-                const photoDiv = document.createElement('div');
-                photoDiv.className = 'position-relative photo-item';
-                photoDiv.setAttribute('data-photo-id', data.photo_id);
-
-                let buttonHtml = '';
-                if (data.is_main) {
-                    buttonHtml = '<span class="position-absolute top-0 start-0 badge bg-primary">Главная</span>';
-                } else {
-                    buttonHtml = `<button type="button" class="btn btn-sm btn-success position-absolute top-0 start-0 set-main-btn"
-                                         data-photo-id="${data.photo_id}" title="Сделать главной">
-                                    <i class="bi bi-star"></i>
-                                  </button>`;
-                }
-
-                photoDiv.innerHTML = `
-                    <img src="${data.photo_url}"
-                         style="width: 150px; height: 100px; object-fit: cover;"
-                         class="rounded">
-                    ${buttonHtml}
-                    <button type="button" class="btn btn-sm btn-danger position-absolute top-0 end-0 delete-photo-btn"
-                            data-photo-id="${data.photo_id}" title="Удалить">
-                        <i class="bi bi-trash"></i>
-                    </button>
-                `;
-
-                photosContainer.appendChild(photoDiv);
-                photoUpload.value = ''; // Reset file input
-
-                // Attach event listeners to new buttons
-                attachPhotoButtonListeners();
-            } else {
-                alert('Ошибка загрузки: ' + data.error);
+    photoUpload.addEventListener('change', async function(e) {
+        const files = Array.from(e.target.files);
+        
+        if (files.length === 0) return;
+        
+        if (files.length > MAX_FILES) {
+            alert(`Максимум ${MAX_FILES} файлов за раз. Вы выбрали: ${files.length}`);
+            photoUpload.value = '';
+            return;
+        }
+        
+        // Validate file sizes before upload
+        for (const file of files) {
+            if (file.size > 5 * 1024 * 1024) {
+                alert(`Файл "${file.name}" превышает 5MB`);
+                photoUpload.value = '';
+                return;
             }
-        })
-        .catch(error => {
-            uploadProgress.style.display = 'none';
-            alert('Ошибка загрузки фотографии');
-            console.error(error);
-        });
+        }
+        
+        uploadProgress.style.display = 'block';
+        let successCount = 0;
+        let errorCount = 0;
+        
+        for (let i = 0; i < files.length; i++) {
+            const file = files[i];
+            const progress = Math.round(((i + 1) / files.length) * 100);
+            
+            progressBar.style.width = progress + '%';
+            progressBar.textContent = `${i + 1}/${files.length}`;
+            uploadStatus.textContent = `Загрузка: ${file.name}`;
+            
+            const formData = new FormData();
+            formData.append('photo', file);
+            formData.append('apartment_id', <?= $apartment['id'] ?>);
+            
+            try {
+                const response = await fetch('upload_apartment_photo.php', {
+                    method: 'POST',
+                    body: formData
+                });
+                const data = await response.json();
+                
+                if (data.success) {
+                    successCount++;
+                    // Add new photo to container
+                    const photoDiv = document.createElement('div');
+                    photoDiv.className = 'position-relative photo-item';
+                    photoDiv.setAttribute('data-photo-id', data.photo_id);
+
+                    let buttonHtml = '';
+                    if (data.is_main) {
+                        buttonHtml = '<span class="position-absolute top-0 start-0 badge bg-primary">Главная</span>';
+                    } else {
+                        buttonHtml = `<button type="button" class="btn btn-sm btn-success position-absolute top-0 start-0 set-main-btn"
+                                             data-photo-id="${data.photo_id}" title="Сделать главной">
+                                        <i class="bi bi-star"></i>
+                                      </button>`;
+                    }
+
+                    photoDiv.innerHTML = `
+                        <img src="${data.photo_url}"
+                             style="width: 150px; height: 100px; object-fit: cover;"
+                             class="rounded">
+                        ${buttonHtml}
+                        <button type="button" class="btn btn-sm btn-danger position-absolute top-0 end-0 delete-photo-btn"
+                                data-photo-id="${data.photo_id}" title="Удалить">
+                            <i class="bi bi-trash"></i>
+                        </button>
+                    `;
+
+                    photosContainer.appendChild(photoDiv);
+                } else {
+                    errorCount++;
+                    console.error(`Ошибка загрузки ${file.name}: ${data.error}`);
+                }
+            } catch (error) {
+                errorCount++;
+                console.error(`Ошибка загрузки ${file.name}:`, error);
+            }
+        }
+        
+        uploadProgress.style.display = 'none';
+        progressBar.style.width = '0%';
+        photoUpload.value = '';
+        
+        // Attach event listeners to new buttons
+        attachPhotoButtonListeners();
+        
+        // Show summary
+        if (errorCount > 0) {
+            alert(`Загружено: ${successCount}, ошибок: ${errorCount}`);
+        }
     });
 }
 
