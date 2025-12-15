@@ -2,8 +2,14 @@
 require_once 'config.php';
 requireLogin();
 
+// Show inactive apartments toggle
+$showInactive = isset($_GET['show_inactive']) && $_GET['show_inactive'] === '1';
+
 $pageTitle = 'Квартиры';
-$pageActions = '<a href="apartment_edit.php" class="btn btn-primary"><i class="bi bi-plus-circle me-1"></i>Добавить</a>';
+$toggleBtn = $showInactive
+    ? '<a href="apartments.php" class="btn btn-outline-secondary"><i class="bi bi-eye-slash me-1"></i>Скрыть неактивные</a>'
+    : '<a href="apartments.php?show_inactive=1" class="btn btn-outline-secondary"><i class="bi bi-eye me-1"></i>Показать неактивные</a>';
+$pageActions = $toggleBtn . ' <a href="apartment_edit.php" class="btn btn-primary"><i class="bi bi-plus-circle me-1"></i>Добавить</a>';
 
 $db = getDB();
 
@@ -12,7 +18,8 @@ if (isset($_GET['delete']) && is_numeric($_GET['delete'])) {
     $stmt = $db->prepare("UPDATE apartments SET is_active = 0 WHERE id = ?");
     $stmt->execute([$_GET['delete']]);
     setFlash('success', 'Квартира деактивирована');
-    header('Location: apartments.php');
+    $redirect = $showInactive ? 'apartments.php?show_inactive=1' : 'apartments.php';
+    header('Location: ' . $redirect);
     exit;
 }
 
@@ -21,7 +28,8 @@ if (isset($_GET['activate']) && is_numeric($_GET['activate'])) {
     $stmt = $db->prepare("UPDATE apartments SET is_active = 1 WHERE id = ?");
     $stmt->execute([$_GET['activate']]);
     setFlash('success', 'Квартира активирована');
-    header('Location: apartments.php');
+    $redirect = $showInactive ? 'apartments.php?show_inactive=1' : 'apartments.php';
+    header('Location: ' . $redirect);
     exit;
 }
 
@@ -36,14 +44,20 @@ $query = "
     WHERE 1=1
 ";
 
+// Filter inactive apartments unless show_inactive is set
+if (!$showInactive) {
+    $query .= " AND a.is_active = 1";
+}
+
 // Filter by landlord if not admin
+$params = [];
 if (isLandlord() && !isAdmin()) {
     $query .= " AND a.landlord_id = ?";
-    $stmt = $db->prepare($query . " ORDER BY a.created_at DESC");
-    $stmt->execute([getUserId()]);
-} else {
-    $stmt = $db->query($query . " ORDER BY a.created_at DESC");
+    $params[] = getUserId();
 }
+
+$stmt = $db->prepare($query . " ORDER BY a.is_active DESC, a.created_at DESC");
+$stmt->execute($params);
 
 $apartments = $stmt->fetchAll();
 
