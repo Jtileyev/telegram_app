@@ -96,6 +96,11 @@ async def process_district_selection(callback: CallbackQuery, state: FSMContext)
 
 async def show_filters_summary(message, filters: dict, lang: str):
     """Show active filters summary"""
+    if 'city_id' not in filters:
+        # State was reset, show error message
+        await message.edit_text(get_text('search_expired', lang))
+        return
+    
     city = db.get_city_by_id(filters['city_id'])
     city_name = city['name_ru'] if lang == 'ru' else city['name_kk']
 
