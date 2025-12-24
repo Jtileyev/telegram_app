@@ -185,12 +185,22 @@ python database/init_database.py
 
 ### 4. Запуск бота
 
+**Development:**
 ```bash
 # Через скрипт
 ./start.sh
 
 # Или напрямую
 cd bot && python main.py
+```
+
+**Production:**
+```bash
+# Управление через systemd сервис
+sudo systemctl start astavaisya-bot    # Запуск
+sudo systemctl stop astavaisya-bot     # Остановка
+sudo systemctl restart astavaisya-bot  # Перезапуск
+sudo systemctl status astavaisya-bot   # Статус
 ```
 
 ### 5. Запуск админ-панели

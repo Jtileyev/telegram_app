@@ -551,7 +551,34 @@ MESSAGES = {
 }
 
 def get_text(key: str, lang: str = 'ru', **kwargs) -> str:
-    """Get localized text by key"""
+    """Get localized text by key - checks database first, then falls back to defaults"""
+    import sqlite3
+    import os
+    
+    # Try to get from database first
+    db_path = os.path.join(os.path.dirname(__file__), '..', 'database', 'rental.db')
+    if os.path.exists(db_path):
+        try:
+            conn = sqlite3.connect(db_path)
+            cursor = conn.cursor()
+            cursor.execute(
+                f"SELECT text_{lang} FROM translations WHERE key = ?",
+                (key,)
+            )
+            row = cursor.fetchone()
+            conn.close()
+            if row and row[0]:
+                text = row[0]
+                if kwargs:
+                    try:
+                        return text.format(**kwargs)
+                    except (KeyError, ValueError):
+                        return text
+                return text
+        except Exception:
+            pass
+    
+    # Fall back to default translations
     text = MESSAGES.get(lang, MESSAGES['ru']).get(key, MESSAGES['ru'].get(key, key))
     if kwargs:
         try:
