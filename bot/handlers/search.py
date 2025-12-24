@@ -241,5 +241,7 @@ async def navigate_apartments(callback: CallbackQuery, state: FSMContext):
     telegram_id = callback.from_user.id
     user = db.get_user(telegram_id)
 
-    await show_apartment(callback.message, state, new_index, user)
+    # Answer callback first to remove loading state
     await callback.answer()
+    
+    await show_apartment(callback.message, state, new_index, user)

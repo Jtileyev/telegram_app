@@ -90,6 +90,7 @@ async def select_date(callback: CallbackQuery, state: FSMContext):
                 reply_markup=get_calendar_keyboard(
                     min_checkout.year, min_checkout.month, lang,
                     min_date=min_checkout,
+                    selected_date=date_str,  # Show check_in date as selected
                     calendar_type='check_out',
                     apartment_id=apartment_id
                 )
