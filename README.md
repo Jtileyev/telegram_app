@@ -201,6 +201,13 @@ sudo systemctl start astavaisya-bot    # Запуск
 sudo systemctl stop astavaisya-bot     # Остановка
 sudo systemctl restart astavaisya-bot  # Перезапуск
 sudo systemctl status astavaisya-bot   # Статус
+
+# Проверить количество запущенных экземпляров (должен быть 1)
+pgrep -fa "main.py"
+
+# После деплоя — очистить кэш Python
+find /var/www/astavaisya/bot -type d -name "__pycache__" -exec rm -rf {} + 2>/dev/null
+sudo systemctl restart astavaisya-bot
 ```
 
 ### 5. Запуск админ-панели

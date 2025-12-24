@@ -4,6 +4,7 @@ Utility functions for the bot
 import os
 import re
 from aiogram.types import Message, FSInputFile, InputMediaPhoto
+from aiogram.fsm.context import FSMContext
 
 import database as db
 from locales import get_text
@@ -112,7 +113,7 @@ def format_apartment_card(apartment: dict, lang: str = 'ru', user_id: int = None
     return text
 
 
-async def send_apartment_card(message: Message, apartment: dict, keyboard, lang: str, user_id: int = None):
+async def send_apartment_card(message: Message, apartment: dict, keyboard, lang: str, user_id: int = None, state: FSMContext = None):
     """Send apartment card with photos and keyboard"""
     from logger import setup_logger
     logger = setup_logger('utils')
@@ -123,29 +124,34 @@ async def send_apartment_card(message: Message, apartment: dict, keyboard, lang:
     # Filter only existing photo files
     valid_photos = [p for p in photos if os.path.exists(p)]
     
+    sent_message_ids = []
+    
+    # Send photos first (without caption)
     if valid_photos:
         try:
             media_group = []
-            for i, photo_path in enumerate(valid_photos[:MAX_PHOTOS_PER_MESSAGE]):
+            for photo_path in valid_photos[:MAX_PHOTOS_PER_MESSAGE]:
                 try:
                     photo = FSInputFile(photo_path)
-                    if i == 0:
-                        media_group.append(InputMediaPhoto(media=photo, caption=text, parse_mode="Markdown"))
-                    else:
-                        media_group.append(InputMediaPhoto(media=photo))
+                    media_group.append(InputMediaPhoto(media=photo))
                 except Exception as e:
                     logger.warning(f"Failed to load photo {photo_path}: {e}")
                     continue
 
             if media_group:
-                await message.answer_media_group(media=media_group)
-            else:
-                # All photos failed to load
-                await message.answer(text, parse_mode="Markdown")
+                sent_photos = await message.answer_media_group(media=media_group)
+                sent_message_ids.extend([m.message_id for m in sent_photos])
         except Exception as e:
             logger.error(f"Error sending photos: {e}")
-            await message.answer(text, parse_mode="Markdown")
-    else:
-        await message.answer(text, parse_mode="Markdown")
-
-    await message.answer(get_text('actions_prompt', lang), reply_markup=keyboard)
+    
+    # Send text separately
+    text_msg = await message.answer(text, parse_mode="Markdown")
+    sent_message_ids.append(text_msg.message_id)
+    
+    # Send keyboard
+    keyboard_msg = await message.answer(get_text('actions_prompt', lang), reply_markup=keyboard)
+    sent_message_ids.append(keyboard_msg.message_id)
+    
+    # Save message IDs for later deletion
+    if state:
+        await state.update_data(apartment_message_ids=sent_message_ids)

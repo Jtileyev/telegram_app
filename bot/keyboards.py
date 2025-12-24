@@ -28,8 +28,7 @@ def get_main_menu_keyboard(lang: str = 'ru'):
             [
                 KeyboardButton(text=get_text('btn_language', lang)),
                 KeyboardButton(text=get_text('btn_landlords', lang))
-            ],
-            [KeyboardButton(text=get_text('btn_clear_chat', lang))]
+            ]
         ],
         resize_keyboard=True,
         one_time_keyboard=False

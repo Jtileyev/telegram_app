@@ -163,6 +163,14 @@ async def show_apartment(message: Message, state: FSMContext, index: int, user: 
     if not apartments or index < 0 or index >= len(apartments):
         return
 
+    # Delete previous apartment messages
+    prev_message_ids = data.get('apartment_message_ids', [])
+    for msg_id in prev_message_ids:
+        try:
+            await message.bot.delete_message(message.chat.id, msg_id)
+        except Exception:
+            pass  # Message already deleted or too old
+
     apartment = apartments[index]
     lang = user['language']
 
@@ -178,7 +186,7 @@ async def show_apartment(message: Message, state: FSMContext, index: int, user: 
         has_next=has_next
     )
 
-    await send_apartment_card(message, apartment, keyboard, lang, user['id'])
+    await send_apartment_card(message, apartment, keyboard, lang, user['id'], state)
     await state.update_data(apt_index=index)
 
 
@@ -197,6 +205,5 @@ async def navigate_apartments(callback: CallbackQuery, state: FSMContext):
     telegram_id = callback.from_user.id
     user = db.get_user(telegram_id)
 
-    await callback.message.delete()
     await show_apartment(callback.message, state, new_index, user)
     await callback.answer()
