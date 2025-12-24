@@ -255,16 +255,17 @@ include 'header.php';
 
                     <div class="mb-3">
                         <label class="form-label">Текущие фотографии</label>
-                        <div id="photos_container" class="d-flex flex-wrap gap-2">
+                        <small class="text-muted d-block mb-2">Перетащите для изменения порядка</small>
+                        <div id="photos_container" class="d-flex flex-wrap gap-2" style="min-height: 50px;">
                             <?php
                             $stmt = $db->prepare("SELECT * FROM apartment_photos WHERE apartment_id = ? ORDER BY is_main DESC, sort_order ASC");
                             $stmt->execute([$apartment['id']]);
                             $photos = $stmt->fetchAll();
                             foreach ($photos as $photo):
                             ?>
-                            <div class="position-relative photo-item" data-photo-id="<?= $photo['id'] ?>">
-                                <img src="../<?= sanitize($photo['photo_path']) ?>"
-                                     style="width: 150px; height: 100px; object-fit: cover;"
+                            <div class="position-relative photo-item" data-photo-id="<?= $photo['id'] ?>" style="cursor: grab;">
+                                <img src="<?= sanitize($photo['photo_path']) ?>"
+                                     style="width: 150px; height: 100px; object-fit: cover; pointer-events: none;"
                                      class="rounded">
                                 <?php if ($photo['is_main']): ?>
                                 <span class="position-absolute top-0 start-0 badge bg-primary">Главная</span>
@@ -509,5 +510,62 @@ function attachPhotoButtonListeners() {
 attachPhotoButtonListeners();
 <?php endif; ?>
 </script>
+
+<!-- SortableJS for drag-and-drop -->
+<script src="https://cdn.jsdelivr.net/npm/sortablejs@1.15.0/Sortable.min.js"></script>
+<style>
+.sortable-ghost {
+    opacity: 0.4;
+}
+.sortable-chosen {
+    box-shadow: 0 0 10px rgba(0,123,255,0.5);
+}
+.photo-item {
+    user-select: none;
+}
+.photo-item:active {
+    cursor: grabbing;
+}
+</style>
+
+<?php if ($apartment): ?>
+<script>
+// Initialize SortableJS for drag-and-drop reordering
+const sortable = new Sortable(document.getElementById('photos_container'), {
+    animation: 150,
+    ghostClass: 'sortable-ghost',
+    chosenClass: 'sortable-chosen',
+    onEnd: function() {
+        savePhotoOrder();
+    }
+});
+
+function savePhotoOrder() {
+    const container = document.getElementById('photos_container');
+    const photoItems = container.querySelectorAll('.photo-item');
+    const photoIds = Array.from(photoItems).map(item => parseInt(item.getAttribute('data-photo-id')));
+    
+    fetch('reorder_photos.php', {
+        method: 'POST',
+        headers: {
+            'Content-Type': 'application/json',
+        },
+        body: JSON.stringify({
+            apartment_id: <?= $apartment['id'] ?>,
+            photo_ids: photoIds
+        })
+    })
+    .then(response => response.json())
+    .then(data => {
+        if (!data.success) {
+            alert('Ошибка сохранения порядка: ' + data.error);
+        }
+    })
+    .catch(error => {
+        console.error('Ошибка сохранения порядка:', error);
+    });
+}
+</script>
+<?php endif; ?>
 
 <?php include 'footer.php'; ?>

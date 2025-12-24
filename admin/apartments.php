@@ -95,7 +95,7 @@ include 'header.php';
                             $photo = $photoStmt->fetchColumn();
                             if ($photo):
                             ?>
-                            <img src="../uploads/apartments/<?= basename($photo) ?>"
+                            <img src="uploads/apartments/<?= basename($photo) ?>"
                                  style="width: 60px; height: 40px; object-fit: cover;"
                                  class="rounded">
                             <?php else: ?>

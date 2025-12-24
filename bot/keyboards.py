@@ -136,12 +136,12 @@ def get_calendar_keyboard(year: int, month: int, lang: str = 'ru',
 
                 # Check if date is booked
                 if date_str in booked_dates:
-                    row.append(InlineKeyboardButton(text="✖", callback_data="ignore"))
+                    row.append(InlineKeyboardButton(text="🔴", callback_data="ignore"))
                 # Disable past dates
                 elif date_obj.date() < min_date.date():
-                    row.append(InlineKeyboardButton(text="·", callback_data="ignore"))
+                    row.append(InlineKeyboardButton(text="◽", callback_data="ignore"))
                 elif date_str == selected_date:
-                    row.append(InlineKeyboardButton(text=f"[{day}]", callback_data="ignore"))
+                    row.append(InlineKeyboardButton(text=f"🔵{day}", callback_data="ignore"))
                 else:
                     row.append(InlineKeyboardButton(
                         text=str(day),

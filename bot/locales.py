@@ -16,6 +16,7 @@ MESSAGES = {
 • Сравнить цены и условия
 • Забронировать жилье онлайн''',
         'enter_full_name': '📝 Пожалуйста, введите ваше ФИО:',
+        'enter_name': '📝 Пожалуйста, введите ваше имя:',
         'enter_phone': '📱 Введите номер телефона в формате:\n+7 (XXX) XXX XX XX',
         'invalid_phone': '⚠️ Некорректный номер телефона\nИспользуйте формат: +7 (XXX) XXX XX XX',
         'registration_complete': '✅ Регистрация завершена!\n\nДобро пожаловать, {name}!',
@@ -262,6 +263,8 @@ MESSAGES = {
         'actions_prompt': '👇 Действия:',
         'apartment_not_found': '❌ Квартира не найдена',
         'apartment_inactive': '⚠️ Эта квартира временно недоступна',
+        'available_today': '🟢 Сегодня свободно',
+        'booked_today': '🔴 Сегодня занято',
         'booking_not_found': '❌ Бронирование не найдено',
         'free_days': 'бесплатно',
         'day_singular': 'день',
@@ -287,6 +290,7 @@ MESSAGES = {
 • Бағалар мен шарттарды салыстыра аласыз
 • Тұрғын үйді онлайн броньдай аласыз''',
         'enter_full_name': '📝 Толық атыңызды енгізіңіз:',
+        'enter_name': '📝 Атыңызды енгізіңіз:',
         'enter_phone': '📱 Телефон нөміріңізді форматта енгізіңіз:\n+7 (XXX) XXX XX XX',
         'invalid_phone': '⚠️ Телефон нөмірі дұрыс емес\nФорматты пайдаланыңыз: +7 (XXX) XXX XX XX',
         'registration_complete': '✅ Тіркелу аяқталды!\n\nҚош келдіңіз, {name}!',
@@ -533,6 +537,8 @@ MESSAGES = {
         'actions_prompt': '👇 Әрекеттер:',
         'apartment_not_found': '❌ Пәтер табылмады',
         'apartment_inactive': '⚠️ Бұл пәтер уақытша қолжетімсіз',
+        'available_today': '🟢 Бүгін бос',
+        'booked_today': '🔴 Бүгін бос емес',
         'booking_not_found': '❌ Броньдау табылмады',
         'free_days': 'тегін',
         'day_singular': 'күн',

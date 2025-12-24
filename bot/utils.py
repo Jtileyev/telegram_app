@@ -51,10 +51,22 @@ def format_price(price: float) -> str:
 
 def format_apartment_card(apartment: dict, lang: str = 'ru', user_id: int = None) -> str:
     """Format apartment information as text"""
+    from datetime import datetime, timedelta
+    
     title_key = 'title_ru' if lang == 'ru' else 'title_kk'
     desc_key = 'description_ru' if lang == 'ru' else 'description_kk'
 
     text = f"🏠 *{apartment[title_key]}*\n\n"
+
+    # Check availability for today
+    today = datetime.now().strftime("%Y-%m-%d")
+    tomorrow = (datetime.now() + timedelta(days=1)).strftime("%Y-%m-%d")
+    is_available_today = db.check_apartment_availability(apartment['id'], today, tomorrow)
+    
+    if is_available_today:
+        text += get_text('available_today', lang) + "\n\n"
+    else:
+        text += get_text('booked_today', lang) + "\n\n"
 
     if apartment.get('promotion_name'):
         promo_text = f"🎁 *{apartment['promotion_name']}*\n"

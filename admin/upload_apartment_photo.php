@@ -88,7 +88,7 @@ $photo_id = $db->lastInsertId();
 echo json_encode([
     'success' => true,
     'photo_id' => $photo_id,
-    'photo_url' => '../' . $relativePath,
+    'photo_url' => $relativePath,
     'is_main' => $is_main,
     'debug_full_path' => $fullPath,
     'debug_relative_path' => $relativePath

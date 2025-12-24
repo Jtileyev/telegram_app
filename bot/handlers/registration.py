@@ -11,7 +11,7 @@ import database as db
 from keyboards import get_language_keyboard, get_main_menu_keyboard, get_back_keyboard
 from locales import get_text
 from logger import setup_logger, get_audit_logger, log_user_action
-from utils import validate_phone
+
 
 router = Router()
 logger = setup_logger('registration')
@@ -20,7 +20,6 @@ audit_logger = get_audit_logger()
 
 class RegistrationStates(StatesGroup):
     waiting_for_name = State()
-    waiting_for_phone = State()
 
 
 @router.message(CommandStart())
@@ -44,7 +43,7 @@ async def cmd_start(message: Message, state: FSMContext):
             )
         else:
             await message.answer(
-                get_text('enter_full_name', lang),
+                get_text('enter_name', lang),
                 reply_markup=get_back_keyboard(lang)
             )
             await state.set_state(RegistrationStates.waiting_for_name)
@@ -65,7 +64,7 @@ async def process_language_selection(callback: CallbackQuery, state: FSMContext)
     await callback.message.edit_text(get_text('language_set', lang))
     await callback.message.answer(get_text('welcome', lang))
     await callback.message.answer(
-        get_text('enter_full_name', lang),
+        get_text('enter_name', lang),
         reply_markup=get_back_keyboard(lang)
     )
     await state.set_state(RegistrationStates.waiting_for_name)
@@ -74,7 +73,7 @@ async def process_language_selection(callback: CallbackQuery, state: FSMContext)
 
 @router.message(RegistrationStates.waiting_for_name)
 async def process_name(message: Message, state: FSMContext):
-    """Handle full name input"""
+    """Handle name input"""
     telegram_id = message.from_user.id
     lang = db.get_user_language(telegram_id)
 
@@ -87,50 +86,14 @@ async def process_name(message: Message, state: FSMContext):
         return
 
     full_name = message.text.strip()
-    if len(full_name) < 3:
-        await message.answer(get_text('enter_full_name', lang))
+    if len(full_name) < 2:
+        await message.answer(get_text('enter_name', lang))
         return
 
     db.update_user(telegram_id, full_name=full_name)
-    await message.answer(
-        get_text('enter_phone', lang),
-        reply_markup=get_back_keyboard(lang)
-    )
-    await state.set_state(RegistrationStates.waiting_for_phone)
-
-
-@router.message(RegistrationStates.waiting_for_phone)
-async def process_phone(message: Message, state: FSMContext):
-    """Handle phone number input"""
-    telegram_id = message.from_user.id
-    lang = db.get_user_language(telegram_id)
-
-    if message.text == get_text('btn_back', lang):
-        await message.answer(
-            get_text('enter_full_name', lang),
-            reply_markup=get_back_keyboard(lang)
-        )
-        await state.set_state(RegistrationStates.waiting_for_name)
-        return
-
-    if message.text == get_text('btn_main_menu', lang):
-        await state.clear()
-        user = db.get_user(telegram_id)
-        await message.answer(
-            get_text('welcome_back', lang, name=user['full_name']),
-            reply_markup=get_main_menu_keyboard(lang)
-        )
-        return
-
-    phone = message.text.strip()
-    if not validate_phone(phone):
-        await message.answer(get_text('invalid_phone', lang))
-        return
-
-    db.update_user(telegram_id, phone=phone)
     user = db.get_user(telegram_id)
 
-    log_user_action(logger, telegram_id, "Registration completed", f"Phone: {phone}")
+    log_user_action(logger, telegram_id, "Registration completed", f"Name: {full_name}")
     audit_logger.info(f"New user registered: {telegram_id}")
 
     await state.clear()

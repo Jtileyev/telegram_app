@@ -19,7 +19,7 @@ echo -e "${BLUE}Запуск админки и бота...${NC}"
 
 # Запуск PHP админки в фоне
 echo -e "${GREEN}Запуск PHP админки на localhost:8080...${NC}"
-php -S localhost:8080 -t . > logs/admin.log 2>&1 &
+php -S localhost:8080 -t admin > logs/admin.log 2>&1 &
 PHP_PID=$!
 echo "PHP сервер запущен (PID: $PHP_PID)"
 

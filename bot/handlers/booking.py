@@ -16,7 +16,7 @@ from locales import get_text
 from logger import setup_logger, get_audit_logger, log_booking_action, log_error
 from notifications import notify_landlord_new_booking
 from constants import PRICE_CURRENCY
-from utils import format_price
+from utils import format_price, validate_phone
 from services.booking_service import BookingService
 
 router = Router()
@@ -224,6 +224,36 @@ async def process_contact(message: Message, state: FSMContext):
     phone = message.contact.phone_number
     if not phone.startswith('+'):
         phone = '+' + phone
+
+    db.update_user(telegram_id, phone=phone)
+    user = db.get_user(telegram_id)
+
+    await create_booking_request(message, state, user)
+
+
+@router.message(BookingStates.waiting_contact, F.text)
+async def process_phone_text(message: Message, state: FSMContext):
+    """Handle phone number as text input"""
+    telegram_id = message.from_user.id
+    user = db.get_user(telegram_id)
+    lang = user['language']
+
+    # Check for back/menu buttons
+    if message.text == get_text('btn_back', lang) or message.text == get_text('btn_main_menu', lang):
+        await state.clear()
+        await message.answer(
+            get_text('welcome_back', lang, name=user['full_name']),
+            reply_markup=get_main_menu_keyboard(lang)
+        )
+        return
+
+    phone = message.text.strip()
+    if not validate_phone(phone):
+        await message.answer(
+            get_text('invalid_phone', lang),
+            reply_markup=get_contact_keyboard(lang)
+        )
+        return
 
     db.update_user(telegram_id, phone=phone)
     user = db.get_user(telegram_id)
