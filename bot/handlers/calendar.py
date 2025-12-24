@@ -50,6 +50,7 @@ async def calendar_navigation(callback: CallbackQuery, state: FSMContext):
 async def select_date(callback: CallbackQuery, state: FSMContext):
     """Handle date selection"""
     from .booking import BookingStates, create_booking_request
+
     # Parse: date_check_in_2025-12-17 or date_check_out_2025-12-17
     # Split only first part, then extract type and date
     _, rest = callback.data.split("_", 1)  # rest = "check_in_2025-12-17"
@@ -83,6 +84,7 @@ async def select_date(callback: CallbackQuery, state: FSMContext):
             check_in_date = datetime.strptime(date_str, "%Y-%m-%d")
             min_checkout = check_in_date + timedelta(days=1)
 
+            # Replace calendar with check_out calendar
             await callback.message.edit_text(
                 get_text('select_check_out', lang),
                 reply_markup=get_calendar_keyboard(
@@ -108,7 +110,11 @@ async def select_date(callback: CallbackQuery, state: FSMContext):
                 await callback.answer(get_text('apartment_booked', lang), show_alert=True)
                 return
 
-            await callback.message.delete()
+            # Remove calendar keyboard after check_out selection
+            try:
+                await callback.message.edit_reply_markup(reply_markup=None)
+            except Exception:
+                pass
 
             if user.get('phone'):
                 await create_booking_request(callback.message, state, user)
@@ -119,7 +125,12 @@ async def select_date(callback: CallbackQuery, state: FSMContext):
                 )
                 await state.set_state(BookingStates.waiting_contact)
     else:
-        await callback.message.edit_text(get_text(f'{calendar_type}_selected', lang, date=date_str))
+        # Remove calendar keyboard for non-booking flow
+        try:
+            await callback.message.edit_reply_markup(reply_markup=None)
+        except Exception:
+            pass
+        await callback.message.answer(get_text(f'{calendar_type}_selected', lang, date=date_str))
 
     await callback.answer()
 
@@ -128,7 +139,13 @@ async def select_date(callback: CallbackQuery, state: FSMContext):
 async def calendar_back(callback: CallbackQuery, state: FSMContext):
     """Back from calendar"""
     from .search import show_filters_summary
-    
+
+    # Remove calendar keyboard
+    try:
+        await callback.message.edit_reply_markup(reply_markup=None)
+    except Exception:
+        pass
+
     telegram_id = callback.from_user.id
     lang = db.get_user_language(telegram_id)
 

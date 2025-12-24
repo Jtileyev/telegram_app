@@ -129,6 +129,12 @@ async def remove_from_favorites(callback: CallbackQuery, state: FSMContext):
 @router.callback_query(F.data.startswith("confirm_unfav_"))
 async def confirm_unfavorite(callback: CallbackQuery):
     """Confirm remove from favorites"""
+    # Remove inline keyboard
+    try:
+        await callback.message.edit_reply_markup(reply_markup=None)
+    except Exception:
+        pass
+
     apartment_id = int(callback.data.split("_")[2])
     telegram_id = callback.from_user.id
     user = db.get_user(telegram_id)
@@ -141,15 +147,20 @@ async def confirm_unfavorite(callback: CallbackQuery):
         return
 
     db.remove_from_favorites(user['id'], apartment_id)
-    await callback.message.edit_text(get_text('removed_from_favorites', lang))
+    await callback.message.answer(get_text('removed_from_favorites', lang))
     await callback.answer()
 
 
 @router.callback_query(F.data.startswith("keep_fav_"))
 async def keep_favorite(callback: CallbackQuery):
     """Keep in favorites"""
+    # Remove inline keyboard
+    try:
+        await callback.message.edit_reply_markup(reply_markup=None)
+    except Exception:
+        pass
+
     telegram_id = callback.from_user.id
     lang = db.get_user_language(telegram_id)
 
-    await callback.message.delete()
     await callback.answer(get_text('kept_in_favorites', lang))

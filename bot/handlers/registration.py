@@ -52,6 +52,12 @@ async def cmd_start(message: Message, state: FSMContext):
 @router.callback_query(F.data.startswith("lang_"))
 async def process_language_selection(callback: CallbackQuery, state: FSMContext):
     """Handle language selection"""
+    # Remove inline keyboard
+    try:
+        await callback.message.edit_reply_markup(reply_markup=None)
+    except Exception:
+        pass
+
     lang = callback.data.split("_")[1]
     telegram_id = callback.from_user.id
 
@@ -61,7 +67,7 @@ async def process_language_selection(callback: CallbackQuery, state: FSMContext)
     else:
         db.update_user(telegram_id, language=lang)
 
-    await callback.message.edit_text(get_text('language_set', lang))
+    await callback.message.answer(get_text('language_set', lang))
     await callback.message.answer(get_text('welcome', lang))
     await callback.message.answer(
         get_text('enter_name', lang),

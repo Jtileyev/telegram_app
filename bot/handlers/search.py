@@ -53,7 +53,14 @@ async def process_city_selection(callback: CallbackQuery, state: FSMContext):
     await state.update_data(filters=filters)
 
     districts = db.get_districts(city_id)
-    await callback.message.edit_text(
+    
+    # Remove keyboard from current message
+    try:
+        await callback.message.edit_reply_markup(reply_markup=None)
+    except Exception:
+        pass
+    
+    await callback.message.answer(
         get_text('select_district', lang),
         reply_markup=get_districts_keyboard(districts, lang)
     )
@@ -68,7 +75,14 @@ async def process_district_selection(callback: CallbackQuery, state: FSMContext)
         telegram_id = callback.from_user.id
         lang = db.get_user_language(telegram_id)
         cities = db.get_cities()
-        await callback.message.edit_text(
+        
+        # Remove keyboard from current message
+        try:
+            await callback.message.edit_reply_markup(reply_markup=None)
+        except Exception:
+            pass
+        
+        await callback.message.answer(
             get_text('select_city', lang),
             reply_markup=get_cities_keyboard(cities, lang)
         )
@@ -88,17 +102,33 @@ async def process_district_selection(callback: CallbackQuery, state: FSMContext)
         district_id = int(callback.data.split("_")[1])
         filters['district_id'] = district_id
 
+    # Remove keyboard from current message
+    try:
+        await callback.message.edit_reply_markup(reply_markup=None)
+    except Exception:
+        pass
+
     await state.update_data(filters=filters)
-    await show_filters_summary(callback.message, filters, lang)
+    await show_filters_summary(callback.message, filters, lang, is_new_message=True)
     await state.set_state(SearchStates.viewing_apartments)
     await callback.answer()
 
 
-async def show_filters_summary(message, filters: dict, lang: str):
+async def show_filters_summary(message, filters: dict, lang: str, is_new_message: bool = False):
     """Show active filters summary"""
     if 'city_id' not in filters:
-        # State was reset, show error message
-        await message.edit_text(get_text('search_expired', lang))
+        # State was reset, redirect to search
+        cities = db.get_cities()
+        if is_new_message:
+            await message.answer(
+                get_text('select_city', lang),
+                reply_markup=get_cities_keyboard(cities, lang)
+            )
+        else:
+            await message.edit_text(
+                get_text('select_city', lang),
+                reply_markup=get_cities_keyboard(cities, lang)
+            )
         return
     
     city = db.get_city_by_id(filters['city_id'])
@@ -120,10 +150,16 @@ async def show_filters_summary(message, filters: dict, lang: str):
     )
     count = len(apartments)
 
-    await message.edit_text(
-        text,
-        reply_markup=get_search_filters_keyboard(filters, count, lang)
-    )
+    if is_new_message:
+        await message.answer(
+            text,
+            reply_markup=get_search_filters_keyboard(filters, count, lang)
+        )
+    else:
+        await message.edit_text(
+            text,
+            reply_markup=get_search_filters_keyboard(filters, count, lang)
+        )
 
 
 @router.callback_query(F.data == "show_apartments")

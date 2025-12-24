@@ -33,6 +33,12 @@ class BookingStates(StatesGroup):
 @router.callback_query(F.data.startswith("book_"))
 async def start_booking(callback: CallbackQuery, state: FSMContext):
     """Start booking process"""
+    # Remove inline keyboard from apartment card
+    try:
+        await callback.message.edit_reply_markup(reply_markup=None)
+    except Exception:
+        pass
+
     apartment_id = int(callback.data.split("_")[1])
     telegram_id = callback.from_user.id
     user = db.get_user(telegram_id)
@@ -264,6 +270,12 @@ async def process_phone_text(message: Message, state: FSMContext):
 @router.callback_query(F.data.startswith("cancel_booking_"))
 async def cancel_booking_confirm(callback: CallbackQuery):
     """Confirm booking cancellation"""
+    # Remove inline keyboard
+    try:
+        await callback.message.edit_reply_markup(reply_markup=None)
+    except Exception:
+        pass
+
     booking_id = int(callback.data.split("_")[2])
     telegram_id = callback.from_user.id
     lang = db.get_user_language(telegram_id)

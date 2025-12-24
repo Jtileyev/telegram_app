@@ -26,6 +26,12 @@ class ReviewStates(StatesGroup):
 @router.callback_query(F.data.startswith("start_review_"))
 async def start_review(callback: CallbackQuery, state: FSMContext):
     """Start review process from booking history"""
+    # Remove inline keyboard
+    try:
+        await callback.message.edit_reply_markup(reply_markup=None)
+    except Exception:
+        pass
+
     booking_id = int(callback.data.split("_")[2])
     telegram_id = callback.from_user.id
     user = db.get_user(telegram_id)
@@ -62,6 +68,12 @@ async def show_reviews(callback: CallbackQuery, state: FSMContext):
     """Show apartment reviews"""
     if callback.data.startswith("reviews_page_"):
         return  # Handled by reviews_pagination
+
+    # Remove inline keyboard
+    try:
+        await callback.message.edit_reply_markup(reply_markup=None)
+    except Exception:
+        pass
 
     apartment_id = int(callback.data.split("_")[1])
     telegram_id = callback.from_user.id
@@ -112,6 +124,12 @@ async def select_rating(callback: CallbackQuery, state: FSMContext):
     """Select review rating"""
     from keyboards import get_detailed_rating_keyboard
 
+    # Remove inline keyboard
+    try:
+        await callback.message.edit_reply_markup(reply_markup=None)
+    except Exception:
+        pass
+
     telegram_id = callback.from_user.id
     user = db.get_user(telegram_id)
     lang = user['language']
@@ -145,6 +163,12 @@ async def rate_cleanliness(callback: CallbackQuery, state: FSMContext):
     """Rate cleanliness"""
     from keyboards import get_detailed_rating_keyboard
 
+    # Remove inline keyboard
+    try:
+        await callback.message.edit_reply_markup(reply_markup=None)
+    except Exception:
+        pass
+
     telegram_id = callback.from_user.id
     lang = db.get_user_language(telegram_id)
 
@@ -164,6 +188,12 @@ async def rate_cleanliness(callback: CallbackQuery, state: FSMContext):
 async def rate_accuracy(callback: CallbackQuery, state: FSMContext):
     """Rate accuracy"""
     from keyboards import get_detailed_rating_keyboard
+
+    # Remove inline keyboard
+    try:
+        await callback.message.edit_reply_markup(reply_markup=None)
+    except Exception:
+        pass
 
     telegram_id = callback.from_user.id
     lang = db.get_user_language(telegram_id)
@@ -185,6 +215,12 @@ async def rate_communication(callback: CallbackQuery, state: FSMContext):
     """Rate communication"""
     from keyboards import get_detailed_rating_keyboard
 
+    # Remove inline keyboard
+    try:
+        await callback.message.edit_reply_markup(reply_markup=None)
+    except Exception:
+        pass
+
     telegram_id = callback.from_user.id
     lang = db.get_user_language(telegram_id)
 
@@ -203,6 +239,12 @@ async def rate_communication(callback: CallbackQuery, state: FSMContext):
 @router.callback_query(F.data.startswith("detail_location_"))
 async def rate_location(callback: CallbackQuery, state: FSMContext):
     """Rate location - last detailed rating, proceed to comment"""
+    # Remove inline keyboard
+    try:
+        await callback.message.edit_reply_markup(reply_markup=None)
+    except Exception:
+        pass
+
     telegram_id = callback.from_user.id
     lang = db.get_user_language(telegram_id)
 
@@ -221,10 +263,16 @@ async def rate_location(callback: CallbackQuery, state: FSMContext):
 @router.callback_query(F.data == "skip_detailed_ratings")
 async def skip_detailed_ratings(callback: CallbackQuery, state: FSMContext):
     """Skip all remaining detailed ratings and go to comment"""
+    # Remove inline keyboard
+    try:
+        await callback.message.edit_reply_markup(reply_markup=None)
+    except Exception:
+        pass
+
     telegram_id = callback.from_user.id
     lang = db.get_user_language(telegram_id)
 
-    await callback.message.edit_text("⏭")
+    await callback.message.answer("⏭")
     await callback.message.answer(
         get_text('enter_review_comment', lang),
         reply_markup=get_skip_comment_keyboard(lang)
@@ -289,6 +337,12 @@ async def save_review_comment(message: Message, state: FSMContext):
 @router.callback_query(F.data == "skip_review_comment")
 async def skip_review_comment(callback: CallbackQuery, state: FSMContext):
     """Skip comment and save review without it"""
+    # Remove inline keyboard
+    try:
+        await callback.message.edit_reply_markup(reply_markup=None)
+    except Exception:
+        pass
+
     telegram_id = callback.from_user.id
     user = db.get_user(telegram_id)
     lang = user['language']
@@ -300,7 +354,7 @@ async def skip_review_comment(callback: CallbackQuery, state: FSMContext):
 
     # Verify user can still leave review
     if not db.can_leave_review(user['id'], booking_id):
-        await callback.message.edit_text(get_text('already_reviewed', lang))
+        await callback.message.answer(get_text('already_reviewed', lang))
         await state.clear()
         await callback.answer()
         return
@@ -318,9 +372,9 @@ async def skip_review_comment(callback: CallbackQuery, state: FSMContext):
             communication=data.get('communication_rating'),
             location=data.get('location_rating')
         )
-        await callback.message.edit_text(get_text('review_submitted', lang))
+        await callback.message.answer(get_text('review_submitted', lang))
     except Exception as e:
-        await callback.message.edit_text(get_text('error_occurred', lang))
+        await callback.message.answer(get_text('error_occurred', lang))
 
     await state.clear()
     await callback.answer()
@@ -391,5 +445,9 @@ async def reviews_pagination(callback: CallbackQuery):
 @router.callback_query(F.data == "reviews_back")
 async def reviews_back(callback: CallbackQuery):
     """Back from reviews"""
-    await callback.message.delete()
+    # Remove inline keyboard
+    try:
+        await callback.message.edit_reply_markup(reply_markup=None)
+    except Exception:
+        pass
     await callback.answer()
