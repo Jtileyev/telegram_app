@@ -556,7 +556,10 @@ def get_text(key: str, lang: str = 'ru', **kwargs) -> str:
     import os
     
     # Try to get from database first
-    db_path = os.path.join(os.path.dirname(__file__), '..', 'database', 'rental.db')
+    # Use absolute path based on this file's location
+    this_file = os.path.abspath(__file__)
+    db_path = os.path.join(os.path.dirname(this_file), '..', 'database', 'rental.db')
+    
     if os.path.exists(db_path):
         try:
             conn = sqlite3.connect(db_path)
