@@ -74,7 +74,7 @@ $query = "
            a.title_ru as apartment_title, a.address, a.promotion_id as apartment_promotion_id,
            landlord.full_name as landlord_name, landlord.phone as landlord_phone,
            p.name as promotion_name, p.bookings_required, p.free_days as promotion_free_days,
-           upp.bookings_count as completed_bookings
+           upp.completed_bookings
     FROM bookings b
     JOIN users renter ON b.user_id = renter.id
     JOIN apartments a ON b.apartment_id = a.id
