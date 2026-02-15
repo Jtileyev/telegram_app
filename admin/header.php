@@ -31,9 +31,113 @@
         .stat-card:hover {
             transform: translateY(-5px);
         }
+        
+        /* Mobile menu toggle button */
+        .mobile-menu-toggle {
+            position: fixed;
+            bottom: 20px;
+            right: 20px;
+            z-index: 1050;
+            width: 56px;
+            height: 56px;
+            border-radius: 50%;
+            box-shadow: 0 4px 12px rgba(0,0,0,0.3);
+        }
+        
+        /* Mobile responsive styles */
+        @media (max-width: 767.98px) {
+            .sidebar {
+                position: fixed;
+                top: 0;
+                left: 0;
+                width: 280px;
+                height: 100vh;
+                z-index: 1040;
+                transform: translateX(-100%);
+                transition: transform 0.3s ease-in-out;
+                overflow-y: auto;
+            }
+            .sidebar.show {
+                transform: translateX(0);
+            }
+            .sidebar-backdrop {
+                position: fixed;
+                top: 0;
+                left: 0;
+                width: 100%;
+                height: 100%;
+                background-color: rgba(0,0,0,0.5);
+                z-index: 1035;
+                display: none;
+            }
+            .sidebar-backdrop.show {
+                display: block;
+            }
+            .main-content {
+                margin-left: 0 !important;
+                width: 100% !important;
+                padding: 0 10px !important;
+            }
+            .main-content h1.h2 {
+                font-size: 1.4rem;
+            }
+            /* Responsive stat cards */
+            .stat-card .card-body {
+                padding: 0.75rem;
+            }
+            .stat-card h2 {
+                font-size: 1.5rem;
+            }
+            .stat-card .fs-1 {
+                font-size: 2rem !important;
+            }
+            /* Responsive tables */
+            .table-responsive {
+                font-size: 0.85rem;
+            }
+            .table td, .table th {
+                padding: 0.5rem 0.25rem;
+                white-space: nowrap;
+            }
+            /* Responsive buttons */
+            .btn-group {
+                flex-wrap: wrap;
+                gap: 0.25rem;
+            }
+            .btn-group .btn {
+                font-size: 0.75rem;
+                padding: 0.25rem 0.5rem;
+            }
+            /* Responsive forms */
+            .form-select-sm {
+                font-size: 0.75rem;
+            }
+            /* Hide some columns on mobile */
+            .hide-mobile {
+                display: none !important;
+            }
+        }
+        
+        /* Tablet styles */
+        @media (min-width: 768px) and (max-width: 991.98px) {
+            .stat-card h2 {
+                font-size: 1.3rem;
+            }
+            .table-responsive {
+                font-size: 0.9rem;
+            }
+        }
     </style>
 </head>
 <body>
+    <!-- Mobile sidebar backdrop -->
+    <div class="sidebar-backdrop" id="sidebarBackdrop"></div>
+    
+    <!-- Mobile menu toggle button -->
+    <button class="btn btn-dark mobile-menu-toggle d-md-none" id="mobileMenuToggle" type="button">
+        <i class="bi bi-list fs-4"></i>
+    </button>
+    
     <div class="container-fluid">
         <div class="row">
             <!-- Sidebar -->

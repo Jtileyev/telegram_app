@@ -21,15 +21,38 @@ loadEnv(__DIR__ . '/../.env');
 
 define('DB_PATH', __DIR__ . '/../database/rental.db');
 define('UPLOADS_PATH', __DIR__ . '/../uploads/apartments/');
-define('SESSION_LIFETIME', 3600); // 1 hour
+define('SESSION_LIFETIME', 31536000); // 1 year (365 days)
 
 // Admin credentials from .env (for initial setup/reset)
 define('ADMIN_EMAIL', getenv('ADMIN_EMAIL') ?: 'admin@example.com');
 define('ADMIN_PASSWORD', getenv('ADMIN_PASSWORD') ?: 'change_me_on_first_login');
 
-// Start session (avoid duplicate starts when embedding other scripts)
+// Start session with 1 year lifetime (avoid duplicate starts when embedding other scripts)
 if (session_status() === PHP_SESSION_NONE) {
+    // Set session cookie lifetime to 1 year
+    ini_set('session.gc_maxlifetime', SESSION_LIFETIME);
+    ini_set('session.cookie_lifetime', SESSION_LIFETIME);
+    
+    session_set_cookie_params([
+        'lifetime' => SESSION_LIFETIME,
+        'path' => '/',
+        'secure' => isset($_SERVER['HTTPS']),
+        'httponly' => true,
+        'samesite' => 'Lax'
+    ]);
+    
     session_start();
+    
+    // Refresh session cookie on each request to extend lifetime
+    if (isset($_COOKIE[session_name()])) {
+        setcookie(session_name(), session_id(), [
+            'expires' => time() + SESSION_LIFETIME,
+            'path' => '/',
+            'secure' => isset($_SERVER['HTTPS']),
+            'httponly' => true,
+            'samesite' => 'Lax'
+        ]);
+    }
 }
 
 // Check if user is logged in

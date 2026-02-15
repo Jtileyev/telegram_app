@@ -74,7 +74,7 @@ $query = "
            a.title_ru as apartment_title, a.address, a.promotion_id as apartment_promotion_id,
            landlord.full_name as landlord_name, landlord.phone as landlord_phone,
            p.name as promotion_name, p.bookings_required, p.free_days as promotion_free_days,
-           upp.completed_bookings, upp.cycle_number
+           upp.bookings_count as completed_bookings
     FROM bookings b
     JOIN users renter ON b.user_id = renter.id
     JOIN apartments a ON b.apartment_id = a.id
@@ -152,6 +152,21 @@ include 'header.php';
                             <strong><?= sanitize($booking['user_name']) ?></strong><br>
                             <small class="text-muted"><?= $booking['user_phone'] ?></small><br>
                             <small class="text-muted">TG: <?= $booking['user_telegram'] ?></small>
+                            <?php if ($booking['user_telegram']): ?>
+                            <br>
+                            <?php 
+                            // Numeric IDs use tg:// protocol, usernames use https://t.me/
+                            $tgLink = is_numeric($booking['user_telegram']) 
+                                ? 'tg://user?id=' . $booking['user_telegram']
+                                : 'https://t.me/' . $booking['user_telegram'];
+                            ?>
+                            <a href="<?= $tgLink ?>" 
+                               target="_blank" 
+                               class="btn btn-sm btn-outline-info mt-1"
+                               title="Написать в Telegram">
+                                <i class="bi bi-telegram"></i> Написать
+                            </a>
+                            <?php endif; ?>
                         </td>
                         <td>
                             <?= sanitize($booking['apartment_title']) ?><br>
