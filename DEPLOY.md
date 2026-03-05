@@ -12,7 +12,6 @@
 
 ```bash
 # Если есть домен — задать переменную перед запуском:
-# export DOMAIN=actavaysa.kz
 
 sudo bash scripts/server_setup.sh
 ```
