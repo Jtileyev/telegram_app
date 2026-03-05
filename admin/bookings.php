@@ -12,56 +12,66 @@ if (isset($_POST['update_status'])) {
     $booking_id = $_POST['booking_id'];
     $new_status = $_POST['status'];
 
-    // Get current booking status and details for notification
-    $stmt = $db->prepare("
-        SELECT b.status as old_status, b.user_id, b.check_in_date, b.check_out_date,
-               a.title_ru, a.address,
-               landlord.full_name as landlord_name, landlord.phone as landlord_phone,
-               renter.language as user_language
-        FROM bookings b
-        JOIN apartments a ON b.apartment_id = a.id
-        JOIN users landlord ON b.landlord_id = landlord.id
-        JOIN users renter ON b.user_id = renter.id
-        WHERE b.id = ?
-    ");
-    $stmt->execute([$booking_id]);
-    $booking_info = $stmt->fetch();
+    try {
+        // Get current booking status and details for notification
+        $stmt = $db->prepare("
+            SELECT b.status as old_status, b.user_id, b.check_in_date, b.check_out_date,
+                   a.title_ru, a.address,
+                   landlord.full_name as landlord_name, landlord.phone as landlord_phone,
+                   renter.language as user_language
+            FROM bookings b
+            JOIN apartments a ON b.apartment_id = a.id
+            JOIN users landlord ON b.landlord_id = landlord.id
+            JOIN users renter ON b.user_id = renter.id
+            WHERE b.id = ?
+        ");
+        $stmt->execute([$booking_id]);
+        $booking_info = $stmt->fetch();
 
-    // Update booking status
-    $stmt = $db->prepare("UPDATE bookings SET status = ?, updated_at = CURRENT_TIMESTAMP WHERE id = ?");
-    $stmt->execute([$new_status, $booking_id]);
-
-    // Create notification if status changed to a notifiable status
-    if ($booking_info && $booking_info['old_status'] !== $new_status) {
-        $notifiable_statuses = ['confirmed', 'rejected', 'completed', 'cancelled'];
-        if (in_array($new_status, $notifiable_statuses)) {
-            $lang = $booking_info['user_language'] ?: 'ru';
-
-            // Build notification message based on status and language
-            $notification_data = json_encode([
-                'status' => $new_status,
-                'apartment_title' => $booking_info['title_ru'],
-                'address' => $booking_info['address'],
-                'check_in' => formatDate($booking_info['check_in_date']),
-                'check_out' => formatDate($booking_info['check_out_date']),
-                'landlord_name' => $booking_info['landlord_name'],
-                'landlord_phone' => $booking_info['landlord_phone'],
-                'lang' => $lang
-            ], JSON_UNESCAPED_UNICODE);
-
-            $stmt = $db->prepare("
-                INSERT INTO notifications (user_id, type, message, is_sent, scheduled_at)
-                VALUES (?, ?, ?, 0, NULL)
-            ");
-            $stmt->execute([
-                $booking_info['user_id'],
-                'booking_status_' . $new_status,
-                $notification_data
-            ]);
+        if (!$booking_info) {
+            setFlash('danger', 'Бронирование не найдено');
+            header('Location: bookings.php');
+            exit;
         }
+
+        // Update booking status
+        $stmt = $db->prepare("UPDATE bookings SET status = ?, updated_at = CURRENT_TIMESTAMP WHERE id = ?");
+        $stmt->execute([$new_status, $booking_id]);
+
+        // Create notification if status changed to a notifiable status
+        if ($booking_info['old_status'] !== $new_status) {
+            $notifiable_statuses = ['confirmed', 'rejected', 'completed', 'cancelled'];
+            if (in_array($new_status, $notifiable_statuses)) {
+                $lang = $booking_info['user_language'] ?: 'ru';
+
+                $notification_data = json_encode([
+                    'status' => $new_status,
+                    'apartment_title' => $booking_info['title_ru'],
+                    'address' => $booking_info['address'],
+                    'check_in' => formatDate($booking_info['check_in_date']),
+                    'check_out' => formatDate($booking_info['check_out_date']),
+                    'landlord_name' => $booking_info['landlord_name'],
+                    'landlord_phone' => $booking_info['landlord_phone'],
+                    'lang' => $lang
+                ], JSON_UNESCAPED_UNICODE);
+
+                $stmt = $db->prepare("
+                    INSERT INTO notifications (user_id, type, message, is_sent, scheduled_at)
+                    VALUES (?, ?, ?, 0, NULL)
+                ");
+                $stmt->execute([
+                    $booking_info['user_id'],
+                    'booking_status_' . $new_status,
+                    $notification_data
+                ]);
+            }
+        }
+
+        setFlash('success', 'Статус обновлен');
+    } catch (Exception $e) {
+        setFlash('danger', 'Ошибка при обновлении статуса: ' . $e->getMessage());
     }
 
-    setFlash('success', 'Статус обновлен');
     header('Location: bookings.php');
     exit;
 }
@@ -74,7 +84,10 @@ $query = "
            a.title_ru as apartment_title, a.address, a.promotion_id as apartment_promotion_id,
            landlord.full_name as landlord_name, landlord.phone as landlord_phone,
            p.name as promotion_name, p.bookings_required, p.free_days as promotion_free_days,
-           upp.completed_bookings
+           upp.completed_bookings,
+           (SELECT COUNT(*) FROM bookings b2
+            WHERE b2.user_id = b.user_id AND b2.apartment_id = b.apartment_id
+           ) as user_apartment_bookings_count
     FROM bookings b
     JOIN users renter ON b.user_id = renter.id
     JOIN apartments a ON b.apartment_id = a.id
@@ -152,10 +165,15 @@ include 'header.php';
                             <strong><?= sanitize($booking['user_name']) ?></strong><br>
                             <small class="text-muted"><?= $booking['user_phone'] ?></small><br>
                             <small class="text-muted">TG: <?= $booking['user_telegram'] ?></small>
+                            <?php if ($booking['user_apartment_bookings_count'] > 1): ?>
+                            <br>
+                            <span class="badge bg-primary" title="Сколько раз этот пользователь бронировал эту квартиру">
+                                <i class="bi bi-arrow-repeat"></i> <?= $booking['user_apartment_bookings_count'] ?> бр.
+                            </span>
+                            <?php endif; ?>
                             <?php if ($booking['user_telegram']): ?>
                             <br>
                             <?php 
-                            // Numeric IDs use tg:// protocol, usernames use https://t.me/
                             $tgLink = is_numeric($booking['user_telegram']) 
                                 ? 'tg://user?id=' . $booking['user_telegram']
                                 : 'https://t.me/' . $booking['user_telegram'];
